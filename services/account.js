@@ -4,7 +4,7 @@ const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
   const result = await pool.query({ text: insert, values: [ phoneNumber, sid ] });
   let account = resultToObject(result);
-  return { account };
+  return account;
 }
 
 const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
@@ -14,7 +14,7 @@ const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
 
     const insertAccount = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
     const resultAccount = await pool.query({ text: insertAccount, values: [ phoneNumber, sid ] });
-    let account = resultToObject(resultAccount);
+    account = resultToObject(resultAccount);
 
     const insertOwn = 'INSERT INTO artemis.own(account_id, user_id) VALUES($1, $2) RETURNING *;';
     await pool.query({ text: insertOwn, values: [ account.id, userId ] });
@@ -25,7 +25,7 @@ const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
     throw e;
   }
 
-  return { account };
+  return account;
 }
 
 export default {

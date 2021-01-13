@@ -70,13 +70,9 @@ app.use(postgraphile(pool, 'artemis', {
 
 app.post('/sms', async (req, res) => {
   const twiml = new Twilio.twiml.MessagingResponse();
-  // const message = req.body.Body;
-  // const from = req.body.From;
-  // const to = req.body.To;
-
-  let from = '+18155439618';
-  let to = '+13128151992';
-  let text = 'Boom';
+  const text = req.body.Body;
+  const from = req.body.From;
+  const to = req.body.To;
 
   ConversationService.insertMessage({ pool, from, to, text });
 
@@ -108,20 +104,15 @@ app.get('/phone-numbers/available', async (req, res) => {
   }
 });
 
-app.post('/phone-numbers', async (req, res) => {
-  // let { userId } = req.user;
-  let userId = 'facebook-10102949405260058';
-  // const { phoneNumber } = req.body.phoneNumber;
-  const phoneNumber = '+15005550006';
+app.post('/phone-numbers', validateProtected, validatePhoneNumber, async (req, res) => {
+  let { userId } = req.user;
+  const { phoneNumber } = req.body.phoneNumber;
+  // const phoneNumber = '+15005550006';
   try {
-    // const result = await client.incomingPhoneNumbers
-    //   .create({
-    //     phoneNumber,
-    //   });
-    const result = {
-      phone_number: phoneNumber,
-      sid: 'asfdasdf',
-    };
+    const result = await client.incomingPhoneNumbers
+      .create({
+        phoneNumber,
+      });
     const { phone_number, sid } = result;
     const account = await AccountService.createAccount({ pool, userId, phoneNumber: phone_number, sid });
     res.json({ account });
