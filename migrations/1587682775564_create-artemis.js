@@ -40,17 +40,12 @@ exports.up = (pgm) => {
   pgm.createIndex({schema: 'artemis', name: 'user'}, 'email');
   pgm.createIndex({schema: 'artemis', name: 'user'}, 'full_name');
 
-  pgm.createTable({schema: 'artemis', name: 'phone_number'}, {
+  pgm.createTable({schema: 'artemis', name: 'account'}, {
     id: {
       type: 'uuid',
       default: new PgLiteral('uuid_generate_v4()'),
       notNull: true,
       primaryKey: true
-    },
-    user_id: {
-      type: 'varchar',
-      notNull: true,
-      references: 'artemis.user (id)',
     },
     phone_number: {
       notNull: true,
@@ -58,6 +53,7 @@ exports.up = (pgm) => {
     },
     sid: {
       notNull: true,
+      unique: true,
       type: 'varchar' ,
     },
     created_at: {
@@ -77,9 +73,8 @@ exports.up = (pgm) => {
    },
  }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'phone_number'}, 'phone_number');
-  pgm.createIndex({schema: 'artemis', name: 'phone_number'}, 'sid');
-  pgm.createIndex({schema: 'artemis', name: 'phone_number'}, 'user_id');
+  pgm.createIndex({schema: 'artemis', name: 'account'}, 'phone_number');
+  pgm.createIndex({schema: 'artemis', name: 'account'}, 'sid');
 
   pgm.createTable({schema: 'artemis', name: 'receipt'}, {
     id: {
@@ -93,10 +88,10 @@ exports.up = (pgm) => {
       notNull: true,
       references: 'artemis.user (id)',
     },
-    phone_id: {
+    account_id: {
       type: 'uuid',
       notNull: true,
-      references: 'artemis.phone_number (id)',
+      references: 'artemis.account (id)',
     },
     receipt: { type: 'varchar' },
     created_at: {
@@ -116,10 +111,10 @@ exports.up = (pgm) => {
    },
  }, { comment: '@omit all' });
 
- pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'phone_id');
+ pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'account_id');
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'user_id');
 
-  pgm.createTable({schema: 'artemis', name: 'owns'}, {
+  pgm.createTable({schema: 'artemis', name: 'own'}, {
     id: {
       type: 'uuid',
       default: new PgLiteral('uuid_generate_v4()'),
@@ -131,15 +126,20 @@ exports.up = (pgm) => {
       notNull: true,
       references: 'artemis.user (id)',
     },
-    phone_id: {
+    account_id: {
       type: 'uuid',
       notNull: true,
-      references: 'artemis.phone_number (id)',
+      references: 'artemis.account (id)',
     },
     created_at: {
-      type: 'timestamp',
+      type: 'timestamptz',
       notNull: true,
       default: pgm.func('current_timestamp')
+    },
+    updated_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
     },
     is_archived: {
       type: 'boolean',
@@ -148,9 +148,8 @@ exports.up = (pgm) => {
     },
   }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'owns'}, 'phone_id');
-  pgm.createIndex({schema: 'artemis', name: 'owns'}, 'user_id');
-
+  pgm.createIndex({schema: 'artemis', name: 'own'}, 'account_id');
+  pgm.createIndex({schema: 'artemis', name: 'own'}, 'user_id');
 
   pgm.createTable({schema: 'artemis', name: 'invitation'}, {
     id: {
@@ -167,17 +166,22 @@ exports.up = (pgm) => {
     code: {
       type: 'text',
       notNull: true,
-      default: substr(md5(random()::text), 0, 25),
+      default: new PgLiteral('substr(md5(random()::text), 0, 25)'),
     },
-    phone_id: {
+    account_id: {
       type: 'uuid',
       notNull: true,
-      references: 'artemis.phone_number (id)',
+      references: 'artemis.account (id)',
     },
     created_at: {
-      type: 'timestamp',
+      type: 'timestamptz',
       notNull: true,
       default: pgm.func('current_timestamp')
+    },
+    updated_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
     },
     is_archived: {
       type: 'boolean',
@@ -186,32 +190,36 @@ exports.up = (pgm) => {
     },
   }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'phone_id');
+  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'account_id');
   pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'sender_id');
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'receiver_id');
 
-  pgm.createTable({schema: 'artemis', name: 'call'}, {
+  pgm.createTable({schema: 'artemis', name: 'conversation'}, {
     id: {
       type: 'uuid',
       default: new PgLiteral('uuid_generate_v4()'),
       notNull: true,
+      unique: true
+    },
+    sender: {
+      type: 'varchar',
+      notNull: true,
       primaryKey: true
     },
-    from: {
-      type: 'varchar',
-    },
-    to: {
-      type: 'varchar',
+    account_id: {
+      primaryKey: true,
+      type: 'uuid',
       notNull: true,
-      references: 'artemis.phone_number (phone_number)',
-    },
-    message: {
-      type: 'varchar',
+      references: 'artemis.account (id)',
     },
     created_at: {
-      type: 'timestamp',
+      type: 'timestamptz',
       notNull: true,
       default: pgm.func('current_timestamp')
+    },
+    updated_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
     },
     is_archived: {
       type: 'boolean',
@@ -220,31 +228,34 @@ exports.up = (pgm) => {
     },
   }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'from');
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'to');
+  pgm.createIndex({schema: 'artemis', name: 'conversation'}, 'sender');
+  pgm.createIndex({schema: 'artemis', name: 'conversation'}, 'account_id');
 
-  pgm.createTable({schema: 'artemis', name: 'sms'}, {
+  pgm.createTable({schema: 'artemis', name: 'message'}, {
     id: {
       type: 'uuid',
       default: new PgLiteral('uuid_generate_v4()'),
       notNull: true,
       primaryKey: true
     },
-    from: {
-      type: 'varchar',
-    },
-    to: {
-      type: 'varchar',
+    conversation_id: {
+      primaryKey: true,
+      type: 'uuid',
       notNull: true,
-      references: 'artemis.phone_number (phone_number)',
+      references: 'artemis.conversation (id)',
     },
-    message: {
+    text: {
       type: 'varchar',
     },
     created_at: {
-      type: 'timestamp',
+      type: 'timestamptz',
       notNull: true,
       default: pgm.func('current_timestamp')
+    },
+    updated_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
     },
     is_archived: {
       type: 'boolean',
@@ -253,15 +264,30 @@ exports.up = (pgm) => {
     },
   }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'from');
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'to');
+  pgm.createIndex({schema: 'artemis', name: 'message'}, 'conversation_id');
 
   pgm.createFunction(
     {schema: 'artemis', name: 'logon_user'},
-    [{name: 'uid', type: 'text'}, {name: 'email', type: 'text'}],
+    [{name: 'id', type: 'text'}, {name: 'email', type: 'text'}],
     {returns: 'artemis.user', language: 'sql', behavior: 'volatile'},
     " insert into artemis.user (id, email) values (id, email) ON CONFLICT (id) DO UPDATE SET updated_at = now() RETURNING *"
   );
+
+  pgm.sql(`INSERT INTO artemis.user (id, email, full_name) VALUES
+     ('facebook-10102949405260058', 'vernonpearson8@gmail.com', 'Vernon Pearson');`);
+
+  pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
+      ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);
+
+  pgm.sql(`INSERT INTO artemis.own (user_id, account_id) VALUES
+      ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
+
+  pgm.sql(`INSERT INTO artemis.conversation (id, sender, account_id) VALUES
+     ('b6b3336b-4b57-472a-929b-8e66fdb5ba71', '+18155439618', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
+
+  pgm.sql(`INSERT INTO artemis.message (conversation_id, text) VALUES
+     ('b6b3336b-4b57-472a-929b-8e66fdb5ba71', 'Hello'),
+     ('b6b3336b-4b57-472a-929b-8e66fdb5ba71', 'super secret');`);
 
 };
 
