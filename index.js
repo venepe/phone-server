@@ -9,6 +9,9 @@ import { validateProtected, validatePhoneNumber, validateInvitation } from './sc
 import AccountService from './services/account';
 import ConversationService from './services/conversation';
 import UserService from './services/user';
+const jwt = require('express-jwt');
+const jwtAuthz = require('express-jwt-authz');
+const jwksRsa = require('jwks-rsa');
 const { Pool } = require('pg');
 const format = require('pg-format');
 const { postgraphile } = require('postgraphile');
@@ -37,6 +40,17 @@ if (
 ) {
   options.host = `/cloudsql/${config.get('INSTANCE_CONNECTION_NAME')}`;
 }
+
+const checkJwt = jwt({
+  secret: jwksRsa.expressJwtSecret({
+    cache: true,
+    rateLimit: true,
+    jwksRequestsPerMinute: 5,
+    jwksUri: `https://bubblepop.us.auth0.com/.well-known/jwks.json`
+  }),
+  issuer: `https://bubblepop.us.auth0.com/`,
+  algorithms: ['RS256']
+});
 
 const pool = new Pool(options);
 
@@ -82,7 +96,6 @@ app.post('/sms', async (req, res) => {
 
 app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
-  console.log('hit');
 
   try {
     // const result = await twilioClient.availablePhoneNumbers('US')
@@ -104,17 +117,36 @@ app.get('/phone-numbers/available', async (req, res) => {
   }
 });
 
-app.post('/phone-numbers', validateProtected, validatePhoneNumber, async (req, res) => {
-  let { userId } = req.user;
-  const { phoneNumber } = req.body.phoneNumber;
-  // const phoneNumber = '+15005550006';
+app.get('/check', checkJwt, async (req, res) => {
+  let user = req.user;
+  console.log(user);
+  res.json({  });
+});
+
+app.post('/users', checkJwt, async (req, res) => {
+  let { email, sub: id, name: fullName, picture: profilePicture } = req.user;
   try {
-    const result = await client.incomingPhoneNumbers
+    const user = await UserService.insertUser({ pool, email, fullName, id, profilePicture });
+    res.json({ user });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.body.account;
+  // const phoneNumber = '+15005550006';
+  console.log(phoneNumber);
+  try {
+    const result = await twilioClient.incomingPhoneNumbers
       .create({
         phoneNumber,
       });
-    const { phone_number, sid } = result;
-    const account = await AccountService.createAccount({ pool, userId, phoneNumber: phone_number, sid });
+      console.log(result);
+    const { phoneNumber: pn, sid } = result;
+    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
     res.json({ account });
   } catch (err) {
     console.log(err);
@@ -181,6 +213,7 @@ app.post('/users', async (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  console.log(err);
   res.status(404).json({});
 });
 

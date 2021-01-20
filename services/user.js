@@ -4,7 +4,7 @@ const insertUser = async ({ pool, id, email, fullName, profilePicture }) => {
   const insert = 'INSERT INTO artemis.user(id, email, full_name, profile_picture) VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET updated_at = NOW(), email = $2 RETURNING *;';
   const result = await pool.query({ text: insert, values: [ id, email, fullName, profilePicture ] });
   let user = resultToObject(result);
-  return { user };
+  return user;
 }
 
 const updateName = async ({ pool, userId, fullName }) => {

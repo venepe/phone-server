@@ -158,7 +158,7 @@ exports.up = (pgm) => {
       notNull: true,
       primaryKey: true
     },
-    sender_id: {
+    user_id: {
       type: 'varchar',
       notNull: true,
       references: 'artemis.user (id)',
@@ -191,7 +191,7 @@ exports.up = (pgm) => {
   }, { comment: '@omit all' });
 
   pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'account_id');
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'sender_id');
+  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'user_id');
 
   pgm.createTable({schema: 'artemis', name: 'conversation'}, {
     id: {
@@ -280,6 +280,9 @@ exports.up = (pgm) => {
       ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);
 
   pgm.sql(`INSERT INTO artemis.own (user_id, account_id) VALUES
+      ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
+
+  pgm.sql(`INSERT INTO artemis.invitation (user_id, account_id) VALUES
       ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
 
   pgm.sql(`INSERT INTO artemis.conversation (id, sender, account_id) VALUES

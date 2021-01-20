@@ -22,7 +22,7 @@ const insertMessage = async ({ pool, from, to, text }) => {
     throw e;
   }
 
-  return { message };
+  return message;
 }
 
 export default {

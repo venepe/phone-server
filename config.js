@@ -18,6 +18,9 @@ nconf
     'PORT',
     'TWILIO_ACCOUNT_SID',
     'TWILIO_AUTH_TOKEN',
+    'AUTH0_CLIENT_ID',
+    'AUTH0_DOMAIN',
+    'AUTH0_CLIENT_SECRET',
   ])
   // 3. Config file
   .file({file: path.join(__dirname, 'config.json')})
@@ -42,6 +45,10 @@ nconf
     PORT: 8002,
     TWILIO_ACCOUNT_SID: '',
     TWILIO_AUTH_TOKEN: '',
+
+    AUTH0_CLIENT_ID: '',
+    AUTH0_DOMAIN: '',
+    AUTH0_CLIENT_SECRET: '',
 
   });
 
