@@ -1,10 +1,23 @@
-import { resultToObject } from '../utilities';
+import { resultToObject, resultToArray } from '../utilities';
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
   const result = await pool.query({ text: insert, values: [ phoneNumber, sid ] });
   let account = resultToObject(result);
   return account;
+}
+
+const selectAccounts = async ({ pool, userId }) => {
+  const select =
+  ' SELECT artemis.account.phone_number, artemis.account.id ' +
+  ' FROM artemis.own ' +
+  ' JOIN artemis.account ON (artemis.own.account_id = artemis.account.id) ' +
+  ' WHERE artemis.own.user_id = $1 ' +
+  ' ORDER BY artemis.account.created_at DESC ' +
+  ' LIMIT 25 ';
+  const result = await pool.query({ text: select, values: [ userId ] });
+  let accounts = resultToArray(result);
+  return accounts;
 }
 
 const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
@@ -87,4 +100,5 @@ export default {
   createOwner,
   deleteOwner,
   isOwner,
+  selectAccounts,
 };

@@ -126,6 +126,17 @@ app.post('/users', checkJwt, async (req, res) => {
   }
 });
 
+app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
+  let { sub: userId } = req.user;
+  try {
+    const accounts = await AccountService.selectAccounts({ pool, userId });
+    res.json({ accounts });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
 app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.body.account;
@@ -184,6 +195,29 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
       //    })
       const result = require('./mock-data/messages');
       res.json({ messages: result.default.messages });
+    } else {
+      res.status(400).json();
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber: from } = req.params;
+  const { to, body } = req.body.message;
+  try {
+    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
+    if (isOwner) {
+      const message = await twilioClient.messages
+        .create({
+           from,
+           to,
+           body,
+         })
+      res.json({ message });
     } else {
       res.status(400).json();
     }
