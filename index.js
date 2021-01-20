@@ -7,7 +7,7 @@ import config from './config';
 import { makeKeysCamelCase } from './utilities';
 import { validateProtected, validatePhoneNumber, validateInvitation } from './schemas';
 import AccountService from './services/account';
-import ConversationService from './services/conversation';
+import InvitationService from './services/invitation';
 import UserService from './services/user';
 const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
@@ -88,8 +88,6 @@ app.post('/sms', async (req, res) => {
   const from = req.body.From;
   const to = req.body.To;
 
-  ConversationService.insertMessage({ pool, from, to, text });
-
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(twiml.toString());
 });
@@ -117,16 +115,10 @@ app.get('/phone-numbers/available', async (req, res) => {
   }
 });
 
-app.get('/check', checkJwt, async (req, res) => {
-  let user = req.user;
-  console.log(user);
-  res.json({  });
-});
-
 app.post('/users', checkJwt, async (req, res) => {
-  let { email, sub: id, name: fullName, picture: profilePicture } = req.user;
+  let { email, sub: userId, name, picture } = req.user;
   try {
-    const user = await UserService.insertUser({ pool, email, fullName, id, profilePicture });
+    const user = await UserService.insertUser({ pool, email, name, userId, picture });
     res.json({ user });
   } catch (err) {
     console.log(err);
@@ -154,11 +146,11 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
-app.post('/invitations', validateProtected, validateInvitation, async (req, res) => {
-  let { userId } = req.user;
-  const { invitation } = req.body.invitation;
+app.post('/accounts/:phoneNumber/invitations', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
   try {
-
+    const invitation = await InvitationService.createInvitation({ pool, userId, phoneNumber });
     res.json({ invitation });
   } catch (err) {
     console.log(err);
@@ -166,46 +158,25 @@ app.post('/invitations', validateProtected, validateInvitation, async (req, res)
   }
 });
 
-app.post('/invitations/:invitationId/accept', validateProtected, async (req, res) => {
-  let { userId } = req.user;
-  const { invitationId } = req.params;
+app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
+  const { code } = req.body.own;
   try {
-
-    res.json({ invitation });
+    const owner = await AccountService.createOwner({ pool, userId, phoneNumber, code });
+    res.json({ owner });
   } catch (err) {
     console.log(err);
     res.status(400).json();
   }
 });
 
-app.post('/invitations/:invitationId/approve', validateProtected, async (req, res) => {
-  let { userId } = req.user;
-  const { invitationId } = req.params;
+app.delete('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
   try {
-
-    res.json({ invitation });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.post('/invitations/:invitationId/reject', validateProtected, async (req, res) => {
-  let { userId } = req.user;
-  const { invitationId } = req.params;
-  try {
-
-    res.json({ invitation });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.post('/users', async (req, res) => {
-  let { user } = req.body;
-  try {
-
+    const owner = await AccountService.deleteOwner({ pool, userId, phoneNumber });
+    res.json({ owner });
   } catch (err) {
     console.log(err);
     res.status(400).json();

@@ -34,11 +34,12 @@ const createOwner = async ({ pool, userId, phoneNumber, code }) => {
     await pool.query('BEGIN')
 
     const selectInvitation =
-    ' SELECT id, account_id ' +
+    ' SELECT artemis.invitation.id, artemis.invitation.account_id ' +
     ' FROM artemis.invitation ' +
     ' JOIN artemis.account ON (artemis.invitation.account_id = artemis.account.id) ' +
     ' WHERE artemis.account.phone_number = $1 ' +
-    ' AND artemis.invitation.code = $2 ';
+    ' AND artemis.invitation.code = $2 ' +
+    ' AND artemis.invitation.created_at > NOW() - INTERVAL \'15 minutes\' ';
     const resultInvitation = await pool.query({ text: selectInvitation, values: [ phoneNumber, code ] });
     let invitation = resultToObject(resultInvitation);
     if (invitation && invitation.accountId) {
@@ -58,15 +59,15 @@ const createOwner = async ({ pool, userId, phoneNumber, code }) => {
   return account;
 }
 
-const archiveOwner = async ({ pool, userId, phoneNumber }) => {
-  const update = `UPDATE artemis.own SET artemis.own.is_archived = true FROM artemis.account WHERE artemis.account.phone_number = $1 AND artemis.own.user_id = $2 RETURNING *;`;
-  await pool.query({ text: update, values: [phoneNumber, userId] });
-  return {};
+const deleteOwner = async ({ pool, userId, phoneNumber }) => {
+  const del = `DELETE FROM artemis.own USING artemis.account WHERE artemis.account.phone_number = $1 AND artemis.own.user_id = $2 RETURNING *;`;
+  await pool.query({ text: del, values: [phoneNumber, userId] });
+  return { success: true };
 }
 
 export default {
   insertAccount,
   createAccount,
   createOwner,
-  archiveOwner,
+  deleteOwner,
 };

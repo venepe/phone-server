@@ -1,12 +1,12 @@
 import { resultToObject } from '../utilities';
 
-const insertInvitation = async ({ pool, userId, phoneNumber }) => {
+const createInvitation = async ({ pool, userId, phoneNumber }) => {
   let invitation = {};
   try {
     await pool.query('BEGIN')
 
     const selectOwn =
-    ' SELECT id, account_id ' +
+    ' SELECT artemis.own.id, artemis.own.account_id ' +
     ' FROM artemis.own ' +
     ' JOIN artemis.account ON (artemis.own.account_id = artemis.account.id) ' +
     ' WHERE artemis.account.phone_number = $1 ' +
@@ -31,5 +31,5 @@ const insertInvitation = async ({ pool, userId, phoneNumber }) => {
 }
 
 export default {
-  insertInvitation,
+  createInvitation,
 };
