@@ -65,9 +65,26 @@ const deleteOwner = async ({ pool, userId, phoneNumber }) => {
   return { success: true };
 }
 
+const isOwner = async ({ pool, userId, phoneNumber }) => {
+  const selectOwn =
+  ' SELECT artemis.own.id, artemis.own.account_id ' +
+  ' FROM artemis.own ' +
+  ' JOIN artemis.account ON (artemis.own.account_id = artemis.account.id) ' +
+  ' WHERE artemis.account.phone_number = $1 ' +
+  ' AND artemis.own.user_id = $2 ';
+  const resultOwn = await pool.query({ text: selectOwn, values: [ phoneNumber, userId ] });
+  let own = resultToObject(resultOwn);
+  if (own && own.accountId) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 export default {
   insertAccount,
   createAccount,
   createOwner,
   deleteOwner,
+  isOwner,
 };

@@ -171,6 +171,50 @@ app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
   }
 });
 
+app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
+  try {
+    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
+    if (isOwner) {
+      // const messages = await twilioClient.messages
+      //   .list({
+      //      to: phoneNumber,
+      //      limit: 100,
+      //    })
+      const result = require('./mock-data/messages');
+      res.json({ messages: result.default.messages });
+    } else {
+      res.status(400).json();
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/accounts/:phoneNumber/calls', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
+  try {
+    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
+    if (isOwner) {
+      // const calls = await twilioClient.calls
+      //   .list({
+      //      to: phoneNumber,
+      //      limit: 100,
+      //    })
+      const result = require('./mock-data/calls');
+      res.json({ calls: result.default.calls });
+    } else {
+      res.status(400).json();
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
 app.delete('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
