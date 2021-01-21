@@ -19,6 +19,7 @@ const PgOmitArchived = require('@graphile-contrib/pg-omit-archived');
 const PgOrderByRelatedPlugin = require('@graphile-contrib/pg-order-by-related');
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
+const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
@@ -48,6 +49,7 @@ const checkJwt = jwt({
     jwksRequestsPerMinute: 5,
     jwksUri: `https://bubblepop.us.auth0.com/.well-known/jwks.json`
   }),
+  audience: `https://bubblepop.io/api/v1/`,
   issuer: `https://bubblepop.us.auth0.com/`,
   algorithms: ['RS256']
 });
@@ -128,6 +130,7 @@ app.post('/users', checkJwt, async (req, res) => {
 
 app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
+  console.log(userId);
   try {
     const accounts = await AccountService.selectAccounts({ pool, userId });
     res.json({ accounts });
@@ -183,41 +186,24 @@ app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
 });
 
 app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
+  console.log(req.headers.authorization);
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
+  console.log(phoneNumber);
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (isOwner) {
+    if (true) {
       // const messages = await twilioClient.messages
       //   .list({
       //      to: phoneNumber,
       //      limit: 100,
       //    })
       const result = require('./mock-data/messages');
-      res.json({ messages: result.default.messages });
-    } else {
-      res.status(400).json();
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.post('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
-  let { sub: userId } = req.user;
-  const { phoneNumber: from } = req.params;
-  const { to, body } = req.body.message;
-  try {
-    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (isOwner) {
-      const message = await twilioClient.messages
-        .create({
-           from,
-           to,
-           body,
-         })
-      res.json({ message });
+      let messages = result.default.messages;
+      messages = messages.filter(({ from }, index) => {
+          return messages.findIndex(message => message.from === from) === index;
+      });
+      res.json({ messages });
     } else {
       res.status(400).json();
     }
@@ -232,7 +218,7 @@ app.get('/accounts/:phoneNumber/calls', checkJwt, async (req, res) => {
   const { phoneNumber } = req.params;
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (isOwner) {
+    if (true) {
       // const calls = await twilioClient.calls
       //   .list({
       //      to: phoneNumber,
@@ -263,7 +249,11 @@ app.delete('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
 
 app.use((err, req, res, next) => {
   console.log(err);
-  res.status(404).json({});
+  let status = 404;
+  if (err.status) {
+    status = err.status
+  }
+  res.status(status).json({});
 });
 
 // Any error
