@@ -200,9 +200,6 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
       //    })
       const result = require('./mock-data/messages');
       let messages = result.default.messages;
-      messages = messages.filter(({ from }, index) => {
-          return messages.findIndex(message => message.from === from) === index;
-      });
       res.json({ messages });
     } else {
       res.status(400).json();
