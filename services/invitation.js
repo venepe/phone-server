@@ -30,6 +30,20 @@ const createInvitation = async ({ pool, userId, phoneNumber }) => {
   return invitation;
 }
 
+const selectInvitation = async ({ pool, phoneNumber, code }) => {
+  const select =
+  ' SELECT artemis.invitation.id, artemis.invitation.account_id ' +
+  ' FROM artemis.invitation ' +
+  ' JOIN artemis.account ON (artemis.invitation.account_id = artemis.account.id) ' +
+  ' WHERE artemis.account.phone_number = $1 ' +
+  ' AND artemis.invitation.code = $2 ' +
+  ' AND artemis.invitation.created_at > NOW() - INTERVAL \'15 minutes\' ';
+  const resultInvitation = await pool.query({ text: select, values: [ phoneNumber, code ] });
+  let invitation = resultToObject(resultInvitation);
+  return invitation;
+}
+
 export default {
   createInvitation,
+  selectInvitation,
 };

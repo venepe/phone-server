@@ -94,6 +94,21 @@ const isOwner = async ({ pool, userId, phoneNumber }) => {
   }
 }
 
+const selectOwners = async ({ pool, userId, phoneNumber }) => {
+  const select =
+  ' SELECT * ' +
+  ' FROM artemis.user ' +
+  ' JOIN artemis.own ON (artemis.own.user_id = artemis.user.id) ' +
+  ' JOIN artemis.account ON (artemis.own.account_id = artemis.account.id) ' +
+  ' WHERE artemis.own.user_id = $1 ' +
+  ' AND artemis.account.phone_number = $2 ';
+  ' ORDER BY artemis.account.created_at DESC ' +
+  ' LIMIT 25 ';
+  const result = await pool.query({ text: select, values: [ userId, phoneNumber ] });
+  let owners = resultToArray(result);
+  return owners;
+}
+
 export default {
   insertAccount,
   createAccount,
@@ -101,4 +116,5 @@ export default {
   deleteOwner,
   isOwner,
   selectAccounts,
+  selectOwners,
 };

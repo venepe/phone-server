@@ -168,7 +168,7 @@ exports.up = (pgm) => {
     code: {
       type: 'text',
       notNull: true,
-      default: new PgLiteral('substr(md5(random()::text), 0, 7)'),
+      default: new PgLiteral('floor(1000 + random() * 8999)::text'),
     },
     account_id: {
       type: 'uuid',

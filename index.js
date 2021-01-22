@@ -160,6 +160,19 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
+app.get('/accounts/:phoneNumber/invitations', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
+  const { code } = req.query;
+  try {
+    const invitation = await InvitationService.selectInvitation({ pool, phoneNumber, code });
+    res.json({ invitation });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
 app.post('/accounts/:phoneNumber/invitations', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
@@ -226,6 +239,18 @@ app.get('/accounts/:phoneNumber/calls', checkJwt, async (req, res) => {
     } else {
       res.status(400).json();
     }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { phoneNumber } = req.params;
+  try {
+    const owners = await AccountService.selectOwners({ pool, userId, phoneNumber });
+    res.json({ owners });
   } catch (err) {
     console.log(err);
     res.status(400).json();
