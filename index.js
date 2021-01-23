@@ -173,7 +173,7 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
-app.post('/invitation/verify', checkJwt, async (req, res) => {
+app.post('/invitations/verify', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   const { token } = req.body.verify;
