@@ -26,6 +26,7 @@
     "express-jwt-authz": "^2.4.1",
     "graphile-build-pg": "^4.5.3",
     "http-errors": "^1.6.3",
+    "js-base64": "^3.6.0",
     "jwks-rsa": "^1.12.2",
     "lodash": "^4.17.15",
     "moment": "^2.25.3",

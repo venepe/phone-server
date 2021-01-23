@@ -20,6 +20,11 @@ exports.up = (pgm) => {
     email: { type: 'varchar' },
     name: { type: 'varchar' },
     picture: { type: 'varchar' },
+    public_key: {
+      type: 'varchar',
+      notNull: false ,
+      comment: '@omit',
+    },
     created_at: {
      type: 'timestamptz',
      notNull: true,
@@ -93,7 +98,9 @@ exports.up = (pgm) => {
       notNull: true,
       references: 'artemis.account (id)',
     },
-    receipt: { type: 'varchar' },
+    transactionDate: { type: 'varchar' },
+    transactionId: { type: 'varchar' },
+    transactionReceipt: { type: 'varchar' },
     created_at: {
      type: 'timestamptz',
      notNull: true,
@@ -153,48 +160,6 @@ exports.up = (pgm) => {
   pgm.createIndex({schema: 'artemis', name: 'own'}, 'account_id');
   pgm.createIndex({schema: 'artemis', name: 'own'}, 'user_id');
 
-  pgm.createTable({schema: 'artemis', name: 'invitation'}, {
-    id: {
-      type: 'uuid',
-      default: new PgLiteral('uuid_generate_v4()'),
-      notNull: true,
-      primaryKey: true
-    },
-    user_id: {
-      type: 'varchar',
-      notNull: true,
-      references: 'artemis.user (id)',
-    },
-    code: {
-      type: 'text',
-      notNull: true,
-      default: new PgLiteral('floor(1000 + random() * 8999)::text'),
-    },
-    account_id: {
-      type: 'uuid',
-      notNull: true,
-      references: 'artemis.account (id)',
-    },
-    created_at: {
-      type: 'timestamptz',
-      notNull: true,
-      default: pgm.func('current_timestamp')
-    },
-    updated_at: {
-     type: 'timestamptz',
-     notNull: true,
-     default: pgm.func('current_timestamp')
-    },
-    is_archived: {
-      type: 'boolean',
-      notNull: true,
-      default: false,
-    },
-  }, { comment: '@omit all' });
-
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'account_id');
-  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'user_id');
-
   pgm.createFunction(
     {schema: 'artemis', name: 'logon_user'},
     [{name: 'id', type: 'text'}, {name: 'email', type: 'text'}],
@@ -209,9 +174,6 @@ exports.up = (pgm) => {
       ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);
 
   pgm.sql(`INSERT INTO artemis.own (user_id, account_id) VALUES
-      ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
-
-  pgm.sql(`INSERT INTO artemis.invitation (user_id, account_id) VALUES
       ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
 
 };

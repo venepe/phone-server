@@ -3,12 +3,13 @@ import http from 'http';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import { Base64 } from 'js-base64';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
 import { validateProtected, validatePhoneNumber, validateInvitation } from './schemas';
 import AccountService from './services/account';
-import InvitationService from './services/invitation';
 import UserService from './services/user';
+import encryption from './utilities/encryption';
 const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
 const jwksRsa = require('jwks-rsa');
@@ -128,6 +129,18 @@ app.post('/users', checkJwt, async (req, res) => {
   }
 });
 
+app.post('/users/public-key', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { publicKey } = req.body.user;
+  try {
+    const user = await UserService.updatePublicKey({ pool, userId, publicKey });
+    res.json({ user });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
 app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
   console.log(userId);
@@ -160,25 +173,24 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
-app.get('/accounts/:phoneNumber/invitations', checkJwt, async (req, res) => {
+app.post('/invitation/verify', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  const { code } = req.query;
+  const { token } = req.body.verify;
   try {
-    const invitation = await InvitationService.selectInvitation({ pool, phoneNumber, code });
-    res.json({ invitation });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
+    let [ base64Message, base64Signature ] = token.split('.');
 
-app.post('/accounts/:phoneNumber/invitations', checkJwt, async (req, res) => {
-  let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
-  try {
-    const invitation = await InvitationService.createInvitation({ pool, userId, phoneNumber });
-    res.json({ invitation });
+    const message = Base64.decode(base64Message);
+    const signature = Base64.decode(base64Signature);
+
+    const payload = JSON.parse(message);
+    const { userId: ownerId, phoneNumber } = payload;
+
+    const user = await UserService.selectUser({ pool, userId: ownerId });
+    const { publicKey } = user;
+    const isValid = encryption.verify(publicKey, message, signature);
+    res.json({ verify: { isValid } });
+
   } catch (err) {
     console.log(err);
     res.status(400).json();
