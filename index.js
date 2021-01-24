@@ -86,16 +86,6 @@ app.use(postgraphile(pool, 'artemis', {
     },
   }));
 
-app.post('/sms', async (req, res) => {
-  const twiml = new Twilio.twiml.MessagingResponse();
-  const text = req.body.Body;
-  const from = req.body.From;
-  const to = req.body.To;
-
-  res.writeHead(200, {'Content-Type': 'text/xml'});
-  res.end(twiml.toString());
-});
-
 app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
 
@@ -251,28 +241,6 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
       const result = require('./mock-data/messages');
       let messages = result.default.messages;
       res.json({ messages });
-    } else {
-      res.status(400).json();
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.get('/accounts/:phoneNumber/calls', checkJwt, async (req, res) => {
-  let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
-  try {
-    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (true) {
-      // const calls = await twilioClient.calls
-      //   .list({
-      //      to: phoneNumber,
-      //      limit: 100,
-      //    })
-      const result = require('./mock-data/calls');
-      res.json({ calls: result.default.calls });
     } else {
       res.status(400).json();
     }
