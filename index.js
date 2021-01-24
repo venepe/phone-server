@@ -22,6 +22,7 @@ const PgOrderByRelatedPlugin = require('@graphile-contrib/pg-order-by-related');
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
 const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
+const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
@@ -49,10 +50,10 @@ const checkJwt = jwt({
     cache: true,
     rateLimit: true,
     jwksRequestsPerMinute: 5,
-    jwksUri: `https://bubblepop.us.auth0.com/.well-known/jwks.json`
+    jwksUri: `https://${AUTH0_DOMAIN}/.well-known/jwks.json`
   }),
   audience: `https://bubblepop.io/api/v1/`,
-  issuer: `https://bubblepop.us.auth0.com/`,
+  issuer: `https://${AUTH0_DOMAIN}/`,
   algorithms: ['RS256']
 });
 
@@ -114,7 +115,7 @@ app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
   console.log(authorization);
   try {
-    const url = `https://bubblepop.us.auth0.com/userinfo`;
+    const url = `https://${AUTH0_DOMAIN}/userinfo`;
     const { data: { sub: userId, email, name, picture } } = await axios({
       method: 'GET',
       url,
@@ -158,8 +159,8 @@ app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
 
 app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber } = req.body.account;
-  // const phoneNumber = '+15005550006';
+  const { phoneNumber: pn, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
+  const phoneNumber = '+15005550006';
   console.log(phoneNumber);
   try {
     const result = await twilioClient.incomingPhoneNumbers
@@ -168,7 +169,8 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
       });
       console.log(result);
     const { phoneNumber: pn, sid } = result;
-    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
+    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid,
+    productId, transactionId, transactionReceipt, platform });
     res.json({ account });
   } catch (err) {
     console.log(err);
@@ -179,9 +181,10 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
 app.post('/invitations/verify', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  const { token } = req.body.verify;
+  const { invitation } = req.body.verify;
+  console.log(invitation);
   try {
-    let [ base64Message, base64Signature ] = token.split('.');
+    let [ base64Message, base64Signature ] = invitation.split('.');
 
     const message = Base64.decode(base64Message);
     const signature = Base64.decode(base64Signature);
@@ -200,12 +203,12 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
   }
 });
 
-app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  const { token } = req.body.own;
+  const { invitation, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.owner;
   try {
-    let [ base64Message, base64Signature ] = token.split('.');
+    let [ base64Message, base64Signature ] = invitation.split('.');
 
     const message = Base64.decode(base64Message);
     const signature = Base64.decode(base64Signature);
@@ -216,7 +219,8 @@ app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
     const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
     const { publicKey } = user;
     const isValid = encryption.verify(publicKey, message, signature);
-    const account = await AccountService.createOwner({ pool, userId, phoneNumber });
+    const account = await AccountService.createOwner({ pool, userId, phoneNumber,
+      productId, transactionId, platform, transactionReceipt });
     res.json({ account });
 
   } catch (err) {
@@ -250,7 +254,7 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
   }
 });
 
-app.get('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+app.get('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   console.log(phoneNumber);
@@ -264,7 +268,7 @@ app.get('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
   }
 });
 
-app.delete('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
+app.delete('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   try {

@@ -98,9 +98,10 @@ exports.up = (pgm) => {
       notNull: true,
       references: 'artemis.account (id)',
     },
-    transactionDate: { type: 'varchar' },
-    transactionId: { type: 'varchar' },
-    transactionReceipt: { type: 'varchar' },
+    platform: { type: 'varchar' },
+    product_id: { type: 'varchar' },
+    transaction_id: { type: 'varchar' },
+    transaction_receipt: { type: 'varchar' },
     created_at: {
      type: 'timestamptz',
      notNull: true,
@@ -119,9 +120,12 @@ exports.up = (pgm) => {
  }, { comment: '@omit all' });
 
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'account_id');
+ pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'created_at');
+ pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'transaction_id');
+ pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'product_id');
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'user_id');
 
-  pgm.createTable({schema: 'artemis', name: 'own'}, {
+  pgm.createTable({schema: 'artemis', name: 'owner'}, {
     id: {
       type: 'uuid',
       default: new PgLiteral('uuid_generate_v4()'),
@@ -156,9 +160,9 @@ exports.up = (pgm) => {
     },
   }, { comment: '@omit all' });
 
-  pgm.createIndex({schema: 'artemis', name: 'own'}, 'id');
-  pgm.createIndex({schema: 'artemis', name: 'own'}, 'account_id');
-  pgm.createIndex({schema: 'artemis', name: 'own'}, 'user_id');
+  pgm.createIndex({schema: 'artemis', name: 'owner'}, 'id');
+  pgm.createIndex({schema: 'artemis', name: 'owner'}, 'account_id');
+  pgm.createIndex({schema: 'artemis', name: 'owner'}, 'user_id');
 
   pgm.createFunction(
     {schema: 'artemis', name: 'logon_user'},
@@ -173,7 +177,7 @@ exports.up = (pgm) => {
   pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
       ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);
 
-  pgm.sql(`INSERT INTO artemis.own (user_id, account_id) VALUES
+  pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
       ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
 
 };
