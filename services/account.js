@@ -41,27 +41,17 @@ const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
   return account;
 }
 
-const createOwner = async ({ pool, userId, phoneNumber, code }) => {
+const createOwner = async ({ pool, userId, phoneNumber }) => {
   let account = {};
   try {
-    await pool.query('BEGIN')
+    await pool.query('BEGIN');
 
-    const selectInvitation =
-    ' SELECT artemis.invitation.id, artemis.invitation.account_id ' +
-    ' FROM artemis.invitation ' +
-    ' JOIN artemis.account ON (artemis.invitation.account_id = artemis.account.id) ' +
-    ' WHERE artemis.account.phone_number = $1 ' +
-    ' AND artemis.invitation.code = $2 ' +
-    ' AND artemis.invitation.created_at > NOW() - INTERVAL \'15 minutes\' ';
-    const resultInvitation = await pool.query({ text: selectInvitation, values: [ phoneNumber, code ] });
-    let invitation = resultToObject(resultInvitation);
-    if (invitation && invitation.accountId) {
-      const insertOwn = 'INSERT INTO artemis.own(account_id, user_id) VALUES($1, $2) RETURNING *;';
-      const resultAccount = await pool.query({ text: insertOwn, values: [ invitation.accountId, userId ] });
-      account = resultToObject(resultAccount);
-    } else {
-      throw new Error('Invalid');
-    }
+    const select = `SELECT * FROM artemis.account WHERE phone_number = $1 LIMIT 1;`;
+    const result = await pool.query({ text: select, values: [phoneNumber] });
+    account = resultToObject(result);
+
+    const insertOwn = 'INSERT INTO artemis.own(account_id, user_id) VALUES($1, $2) RETURNING *;';
+    await pool.query({ text: insertOwn, values: [ account.id, userId ] });
 
     await pool.query('COMMIT')
   } catch (e) {
@@ -100,11 +90,10 @@ const selectOwners = async ({ pool, userId, phoneNumber }) => {
   ' FROM artemis.user ' +
   ' JOIN artemis.own ON (artemis.own.user_id = artemis.user.id) ' +
   ' JOIN artemis.account ON (artemis.own.account_id = artemis.account.id) ' +
-  ' WHERE artemis.own.user_id = $1 ' +
-  ' AND artemis.account.phone_number = $2 ';
+  ' WHERE artemis.account.phone_number = $1 ' +
   ' ORDER BY artemis.account.created_at DESC ' +
   ' LIMIT 25 ';
-  const result = await pool.query({ text: select, values: [ userId, phoneNumber ] });
+  const result = await pool.query({ text: select, values: [ phoneNumber ] });
   let owners = resultToArray(result);
   return owners;
 }

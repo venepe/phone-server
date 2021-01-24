@@ -3,6 +3,7 @@ import http from 'http';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import axios from 'axios';
 import { Base64 } from 'js-base64';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
@@ -119,8 +120,20 @@ app.get('/phone-numbers/available', async (req, res) => {
 });
 
 app.post('/users', checkJwt, async (req, res) => {
-  let { email, sub: userId, name, picture } = req.user;
+  console.log('users');
+  let authorization = req.headers.authorization;
+  console.log(authorization);
   try {
+    const url = `https://bubblepop.us.auth0.com/userinfo`;
+    const { data: { sub: userId, email, name, picture } } = await axios({
+      method: 'GET',
+      url,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: authorization,
+      },
+    });
     const user = await UserService.insertUser({ pool, email, name, userId, picture });
     res.json({ user });
   } catch (err) {
@@ -200,10 +213,22 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
 app.post('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  const { code } = req.body.own;
+  const { token } = req.body.own;
   try {
-    const owner = await AccountService.createOwner({ pool, userId, phoneNumber, code });
-    res.json({ owner });
+    let [ base64Message, base64Signature ] = token.split('.');
+
+    const message = Base64.decode(base64Message);
+    const signature = Base64.decode(base64Signature);
+
+    const payload = JSON.parse(message);
+    const { userId: ownerId, phoneNumber } = payload;
+
+    const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
+    const { publicKey } = user;
+    const isValid = encryption.verify(publicKey, message, signature);
+    const account = await AccountService.createOwner({ pool, userId, phoneNumber });
+    res.json({ account });
+
   } catch (err) {
     console.log(err);
     res.status(400).json();
@@ -260,8 +285,10 @@ app.get('/accounts/:phoneNumber/calls', checkJwt, async (req, res) => {
 app.get('/accounts/:phoneNumber/owns', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
+  console.log(phoneNumber);
   try {
     const owners = await AccountService.selectOwners({ pool, userId, phoneNumber });
+    console.log(owners);
     res.json({ owners });
   } catch (err) {
     console.log(err);
