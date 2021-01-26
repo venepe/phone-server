@@ -4,6 +4,7 @@ import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import axios from 'axios';
+import moment from 'moment';
 import { Base64 } from 'js-base64';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
@@ -111,9 +112,7 @@ app.get('/phone-numbers/available', async (req, res) => {
 });
 
 app.post('/users', checkJwt, async (req, res) => {
-  console.log('users');
   let authorization = req.headers.authorization;
-  console.log(authorization);
   try {
     const url = `https://${AUTH0_DOMAIN}/userinfo`;
     const { data: { sub: userId, email, name, picture } } = await axios({
@@ -182,7 +181,7 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   const { invitation } = req.body.verify;
-  console.log(invitation);
+
   try {
     let [ base64Message, base64Signature ] = invitation.split('.');
 
@@ -190,7 +189,12 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
     const signature = Base64.decode(base64Signature);
 
     const payload = JSON.parse(message);
-    const { userId: ownerId, phoneNumber } = payload;
+    const { userId: ownerId, phoneNumber, expires } = payload;
+
+    if (moment() > moment(expires)) {
+      res.json({ verify: { isValid: false } });
+      return;
+    }
 
     const user = await UserService.selectUser({ pool, userId: ownerId });
     const { publicKey } = user;
@@ -216,12 +220,20 @@ app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
     const payload = JSON.parse(message);
     const { userId: ownerId, phoneNumber } = payload;
 
-    const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
-    const { publicKey } = user;
-    const isValid = encryption.verify(publicKey, message, signature);
-    const account = await AccountService.createOwner({ pool, userId, phoneNumber,
-      productId, transactionId, platform, transactionReceipt });
-    res.json({ account });
+    if (moment() < moment(expires)) {
+      const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
+      const { publicKey } = user;
+      const isValid = encryption.verify(publicKey, message, signature);
+      if (isValid) {
+        const account = await AccountService.createOwner({ pool, userId, phoneNumber,
+          productId, transactionId, platform, transactionReceipt });
+        res.json({ account });
+      } else {
+        res.status(400).json();
+      }
+    } else {
+      res.status(400).json();
+    }
 
   } catch (err) {
     console.log(err);
