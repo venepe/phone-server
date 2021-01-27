@@ -191,15 +191,14 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
     const payload = JSON.parse(message);
     const { userId: ownerId, phoneNumber, expires } = payload;
 
-    if (moment() > moment(expires)) {
+    if (moment() < moment(expires)) {
+      const user = await UserService.selectUser({ pool, userId: ownerId });
+      const { publicKey } = user;
+      const isValid = encryption.verify(publicKey, message, signature);
+      res.json({ verify: { isValid } });
+    } else {
       res.json({ verify: { isValid: false } });
-      return;
     }
-
-    const user = await UserService.selectUser({ pool, userId: ownerId });
-    const { publicKey } = user;
-    const isValid = encryption.verify(publicKey, message, signature);
-    res.json({ verify: { isValid } });
 
   } catch (err) {
     console.log(err);

@@ -55,12 +55,12 @@ source ~/.bashrc
 ```
 
 ```
-gcloud app deploy app.yaml
+gcloud builds submit --tag gcr.io/priceclip/artemis-nodejs
 ```
 
 ```
-gcloud app logs tail
+gcloud run deploy --image gcr.io/priceclip/artemis-nodejs   --add-cloudsql-instances priceclip:us-central1:priceclip-db-production   --update-env-vars INSTANCE_CONNECTION_NAME="priceclip:us-central1:priceclip-db-production" --platform managed
 ```
 
 ### Notes
-Front porch of the internet
+On a mission to make us work
