@@ -16,10 +16,6 @@ const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
 const jwksRsa = require('jwks-rsa');
 const { Pool } = require('pg');
-const format = require('pg-format');
-const { postgraphile } = require('postgraphile');
-const PgOmitArchived = require('@graphile-contrib/pg-omit-archived');
-const PgOrderByRelatedPlugin = require('@graphile-contrib/pg-order-by-related');
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
 const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
@@ -27,8 +23,6 @@ const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-const useGraphiql = config.get('NODE_ENV') === 'production' ? true : true;
 console.log(config.get('POSTGRES_HOST'));
 
 const options = {
@@ -66,27 +60,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/graphql',
- // jwt({secret: publicKey}),
- (req, res, next) => {
-  // const { operationName, variables } = req.body;
-  // const { userId } = req.user;
-  next();
-});
-
-//GraphQL Api
-app.use(postgraphile(pool, 'artemis', {
-    graphiql: useGraphiql,
-    disableDefaultMutations: true,
-    appendPlugins: [
-      PgOmitArchived,
-      PgOrderByRelatedPlugin,
-    ],
-    graphileBuildOptions: {
-      pgArchivedColumnName: 'is_archived',
-    },
-  }));
 
 app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
