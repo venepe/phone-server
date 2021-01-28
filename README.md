@@ -55,11 +55,11 @@ source ~/.bashrc
 ```
 
 ```
-gcloud builds submit --tag gcr.io/priceclip/artemis-nodejs
+gcloud builds submit --tag gcr.io/bubblepop/api-nodejs
 ```
 
 ```
-gcloud run deploy --image gcr.io/priceclip/artemis-nodejs   --add-cloudsql-instances priceclip:us-central1:priceclip-db-production   --update-env-vars INSTANCE_CONNECTION_NAME="priceclip:us-central1:priceclip-db-production" --platform managed
+gcloud run deploy --image gcr.io/bubblepop/api-nodejs   --add-cloudsql-instances bubblepop:us-central1:bubblepop-db-production   --update-env-vars INSTANCE_CONNECTION_NAME="bubblepop:us-central1:bubblepop-db-production" --platform managed --allow-unauthenticated
 ```
 
 ### Notes
