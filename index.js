@@ -26,6 +26,7 @@ const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const APPLE_SHARED_SECRET = config.get('APPLE_SHARED_SECRET');
 const GOOGLE_SERVICE_ACCOUNT_EMAIL = config.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY = config.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
+const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 console.log(config.get('POSTGRES_HOST'));
 
@@ -76,23 +77,29 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.post('/sms', async (req, res) => {
+  const twiml = new Twilio.twiml.MessagingResponse();
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end(twiml.toString());
+});
+
 app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
 
   try {
-    // const result = await twilioClient.availablePhoneNumbers('US')
-    //   .local
-    //   .list({
-    //     sms_enabled: true,
-    //     mms_enabled: true,
-    //     voice_enabled: true,
-    //     near_lat_long: `${lat},${lon}`,
-    //     distance: 25,
-    //     limit: 20,
-    //   });
+    const phoneNumbers = await twilioClient.availablePhoneNumbers('US')
+      .local
+      .list({
+        smsEnabled: true,
+        mmsEnabled: true,
+        voiceEnabled: true,
+        nearLatLong: `${lat},${lon}`,
+        distance: 10,
+        limit: 20,
+      });
 
-    const result = require('./mock-data/phone-numbers');
-    res.json({ phoneNumbers: result.default.phoneNumbers });
+    // const result = require('./mock-data/phone-numbers');
+    res.json({ phoneNumbers });
   } catch (err) {
     console.log(err);
     res.status(400).json();
@@ -134,7 +141,7 @@ app.post('/users/public-key', checkJwt, async (req, res) => {
 
 app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
-  console.log(userId);
+
   try {
     const accounts = await AccountService.selectAccounts({ pool, userId });
     res.json({ accounts });
@@ -146,8 +153,8 @@ app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
 
 app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber: pn, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
-  const phoneNumber = '+15005550006';
+  const { phoneNumber, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
+  // const phoneNumber = '+15005550006';
   try {
     // await iap.setup();
     // let receipt = transactionReceipt;
@@ -159,8 +166,9 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
     const result = await twilioClient.incomingPhoneNumbers
       .create({
         phoneNumber,
+        smsUrl: TWILIO_SMS_URL,
       });
-      console.log(result);
+
     const { phoneNumber: pn, sid } = result;
     const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid,
     productId, transactionId, transactionReceipt, platform });
@@ -235,20 +243,21 @@ app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
 });
 
 app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
-  console.log(req.headers.authorization);
+
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  console.log(phoneNumber);
+
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
     if (true) {
-      // const messages = await twilioClient.messages
-      //   .list({
-      //      to: phoneNumber,
-      //      limit: 100,
-      //    })
-      const result = require('./mock-data/messages');
-      let messages = result.default.messages;
+      const messages = await twilioClient.messages
+        .list({
+           to: phoneNumber,
+           limit: 100,
+         })
+      // const result = require('./mock-data/messages');
+      // let messages = result.default.messages;
+
       res.json({ messages });
     } else {
       res.status(400).json();
@@ -262,10 +271,9 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
 app.get('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  console.log(phoneNumber);
+
   try {
     const owners = await AccountService.selectOwners({ pool, userId, phoneNumber });
-    console.log(owners);
     res.json({ owners });
   } catch (err) {
     console.log(err);
