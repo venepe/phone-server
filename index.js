@@ -17,13 +17,28 @@ const jwtAuthz = require('express-jwt-authz');
 const jwksRsa = require('jwks-rsa');
 const { Pool } = require('pg');
 import Twilio from 'twilio';
+import iap from 'in-app-purchase';
 const PORT = config.get('PORT');
 const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
 const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
+const APPLE_SHARED_SECRET = config.get('APPLE_SHARED_SECRET');
+const GOOGLE_SERVICE_ACCOUNT_EMAIL = config.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+const GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY = config.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 console.log(config.get('POSTGRES_HOST'));
+
+iap.config({
+    appleExcludeOldTransactions: true,
+    applePassword: APPLE_SHARED_SECRET,
+    googleServiceAccount: {
+      clientEmail: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      privateKey: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+    },
+    test: true,
+    verbose: true,
+});
 
 const options = {
   user: config.get('POSTGRES_USER'),
@@ -133,8 +148,14 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber: pn, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
   const phoneNumber = '+15005550006';
-  console.log(phoneNumber);
   try {
+    // await iap.setup();
+    // let receipt = transactionReceipt;
+    // if (platform === 'android') {
+    //   receipt = JSON.parse(receipt);
+    // }
+    // const data = await iap.validate(receipt);
+
     const result = await twilioClient.incomingPhoneNumbers
       .create({
         phoneNumber,

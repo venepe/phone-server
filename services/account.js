@@ -1,4 +1,5 @@
 import { resultToObject, resultToArray } from '../utilities';
+const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 2;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
@@ -25,15 +26,23 @@ const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transa
   try {
     await pool.query('BEGIN')
 
-    const insertAccount = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
-    const resultAccount = await pool.query({ text: insertAccount, values: [ phoneNumber, sid ] });
-    account = resultToObject(resultAccount);
+    const selectReceipt = 'SELECT COUNT(*) FROM artemis.receipt WHERE transaction_receipt = $1';
+    const resultCount = await pool.query({ text: selectReceipt, values: [ transactionReceipt ] });
+    let { count } = resultToObject(resultCount);
 
-    const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
-    await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+    if (count < MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE) {
+      const insertAccount = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
+      const resultAccount = await pool.query({ text: insertAccount, values: [ phoneNumber, sid ] });
+      account = resultToObject(resultAccount);
 
-    const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
-    await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
+      const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
+      await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+
+      const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
+      await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
+    } else {
+      throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
+    }
 
     await pool.query('COMMIT')
   } catch (e) {
