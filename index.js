@@ -219,7 +219,7 @@ app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
     const signature = Base64.decode(base64Signature);
 
     const payload = JSON.parse(message);
-    const { userId: ownerId, phoneNumber } = payload;
+    const { userId: ownerId, phoneNumber, expires } = payload;
 
     if (moment() < moment(expires)) {
       const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
