@@ -156,7 +156,11 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
     res.json({ account });
   } catch (err) {
     console.log(err);
-    res.status(400).json();
+    let message = '';
+    if (err.message === 'MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE') {
+      message = 'You reached the maximum number of lines you can create in a month'
+    }
+    res.status(400).json({ message });
   }
 });
 
@@ -261,7 +265,7 @@ app.get('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   }
 });
 
-app.delete('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
+app.delete('/accounts/:phoneNumber/owners/me', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   try {
