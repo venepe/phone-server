@@ -61,6 +61,11 @@ exports.up = (pgm) => {
       unique: true,
       type: 'varchar' ,
     },
+    is_active: {
+      notNull: true,
+      default: false,
+      type: 'boolean' ,
+    },
     created_at: {
      type: 'timestamptz',
      notNull: true,
@@ -78,6 +83,7 @@ exports.up = (pgm) => {
    },
  }, { comment: '@omit all' });
 
+  pgm.createIndex({schema: 'artemis', name: 'account'}, 'is_active');
   pgm.createIndex({schema: 'artemis', name: 'account'}, 'phone_number');
   pgm.createIndex({schema: 'artemis', name: 'account'}, 'sid');
 
@@ -98,10 +104,6 @@ exports.up = (pgm) => {
       notNull: true,
       references: 'artemis.account (id)',
     },
-    platform: { type: 'varchar' },
-    product_id: { type: 'varchar' },
-    transaction_id: { type: 'varchar' },
-    transaction_receipt: { type: 'varchar' },
     created_at: {
      type: 'timestamptz',
      notNull: true,
@@ -121,8 +123,6 @@ exports.up = (pgm) => {
 
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'account_id');
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'created_at');
- pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'transaction_id');
- pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'product_id');
  pgm.createIndex({schema: 'artemis', name: 'receipt'}, 'user_id');
 
   pgm.createTable({schema: 'artemis', name: 'owner'}, {

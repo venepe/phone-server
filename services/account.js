@@ -1,5 +1,5 @@
 import { resultToObject, resultToArray } from '../utilities';
-const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 2;
+const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 1;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
@@ -10,7 +10,7 @@ const insertAccount = async ({ pool, phoneNumber, sid }) => {
 
 const selectAccounts = async ({ pool, userId }) => {
   const select =
-  ' SELECT artemis.account.phone_number, artemis.account.id ' +
+  ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
   ' FROM artemis.owner ' +
   ' JOIN artemis.account ON (artemis.owner.account_id = artemis.account.id) ' +
   ' WHERE artemis.owner.user_id = $1 ' +
@@ -21,13 +21,13 @@ const selectAccounts = async ({ pool, userId }) => {
   return accounts;
 }
 
-const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transactionId, transactionReceipt, platform }) => {
+const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
   let account = {};
   try {
     await pool.query('BEGIN')
 
-    const selectReceipt = 'SELECT COUNT(*) FROM artemis.receipt WHERE transaction_receipt = $1';
-    const resultCount = await pool.query({ text: selectReceipt, values: [ transactionReceipt ] });
+    const selectReceipt = 'SELECT COUNT(*) FROM artemis.receipt WHERE user_id = $1';
+    const resultCount = await pool.query({ text: selectReceipt, values: [ userId ] });
     let { count } = resultToObject(resultCount);
 
     if (count < MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE) {
@@ -38,8 +38,8 @@ const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transa
       const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
       await pool.query({ text: insertOwner, values: [ account.id, userId ] });
 
-      const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
-      await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
+      const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id) VALUES($1, $2) RETURNING *;';
+      await pool.query({ text: insertReceipt, values: [ account.id, userId ] });
     } else {
       throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
     }
@@ -53,20 +53,21 @@ const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transa
   return account;
 }
 
-const createOwner = async ({ pool, userId, phoneNumber, productId, transactionId, transactionReceipt, platform }) => {
-  let account = {};
+const createOwner = async ({ pool, userId, phoneNumber }) => {
+  let owner = {};
   try {
     await pool.query('BEGIN');
 
     const select = `SELECT * FROM artemis.account WHERE phone_number = $1 LIMIT 1;`;
     const result = await pool.query({ text: select, values: [phoneNumber] });
-    account = resultToObject(result);
+    const account = resultToObject(result);
+
+    const update = 'UPDATE artemis.account SET is_active = true WHERE artemis.account.id = $1;';
+    await pool.query({ text: update, values: [ account.id ] });
 
     const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
-    await pool.query({ text: insertOwner, values: [ account.id, userId ] });
-
-    const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
-    await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
+    const resultOwner = await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+    owner = resultToObject(resultOwner);
 
     await pool.query('COMMIT')
   } catch (e) {
@@ -74,7 +75,7 @@ const createOwner = async ({ pool, userId, phoneNumber, productId, transactionId
     throw e;
   }
 
-  return account;
+  return owner;
 }
 
 const deleteOwner = async ({ pool, userId, phoneNumber }) => {

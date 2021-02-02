@@ -21,7 +21,6 @@ nconf
     'AUTH0_CLIENT_ID',
     'AUTH0_DOMAIN',
     'AUTH0_CLIENT_SECRET',
-    'APPLE_SHARED_SECRET',
   ])
   // 3. Config file
   .file({file: path.join(__dirname, 'config.json')})
@@ -51,11 +50,6 @@ nconf
     AUTH0_CLIENT_ID: '',
     AUTH0_DOMAIN: '',
     AUTH0_CLIENT_SECRET: '',
-
-    APPLE_SHARED_SECRET: '',
-
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: '',
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: '',
   });
 
 // Check for required settings

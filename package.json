@@ -24,7 +24,6 @@
     "express-jwt": "^6.0.0",
     "express-jwt-authz": "^2.4.1",
     "http-errors": "^1.6.3",
-    "in-app-purchase": "^1.11.4",
     "js-base64": "^3.6.0",
     "jwks-rsa": "^1.12.2",
     "lodash": "^4.17.15",
@@ -34,6 +33,7 @@
     "node-pg-migrate": "^4.6.1",
     "pg": "^8.0.2",
     "pg-format": "^1.0.4",
+    "socket.io": "^3.1.0",
     "twilio": "^3.54.2",
     "yup": "^0.28.5"
   },

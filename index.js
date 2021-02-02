@@ -12,34 +12,21 @@ import { validateProtected, validatePhoneNumber, validateInvitation } from './sc
 import AccountService from './services/account';
 import UserService from './services/user';
 import encryption from './utilities/encryption';
+import { Server } from 'socket.io';
 const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
 const jwksRsa = require('jwks-rsa');
 const { Pool } = require('pg');
 import Twilio from 'twilio';
-import iap from 'in-app-purchase';
 const PORT = config.get('PORT');
 const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
 const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
-const APPLE_SHARED_SECRET = config.get('APPLE_SHARED_SECRET');
-const GOOGLE_SERVICE_ACCOUNT_EMAIL = config.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
-const GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY = config.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
 const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+let io;
 console.log(config.get('POSTGRES_HOST'));
-
-iap.config({
-    appleExcludeOldTransactions: true,
-    applePassword: APPLE_SHARED_SECRET,
-    googleServiceAccount: {
-      clientEmail: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      privateKey: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
-    },
-    test: true,
-    verbose: true,
-});
 
 const options = {
   user: config.get('POSTGRES_USER'),
@@ -87,18 +74,18 @@ app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
 
   try {
-    const phoneNumbers = await twilioClient.availablePhoneNumbers('US')
-      .local
-      .list({
-        smsEnabled: true,
-        mmsEnabled: true,
-        voiceEnabled: true,
-        nearLatLong: `${lat},${lon}`,
-        distance: 10,
-        limit: 20,
-      });
+    // const phoneNumbers = await twilioClient.availablePhoneNumbers('US')
+    //   .local
+    //   .list({
+    //     smsEnabled: true,
+    //     mmsEnabled: true,
+    //     voiceEnabled: true,
+    //     nearLatLong: `${lat},${lon}`,
+    //     distance: 10,
+    //     limit: 20,
+    //   });
 
-    // const result = require('./mock-data/phone-numbers');
+    const { default: { phoneNumbers } } = require('./mock-data/phone-numbers');
     res.json({ phoneNumbers });
   } catch (err) {
     console.log(err);
@@ -108,6 +95,7 @@ app.get('/phone-numbers/available', async (req, res) => {
 
 app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
+  console.log('authorization');
   try {
     const url = `https://${AUTH0_DOMAIN}/userinfo`;
     const { data: { sub: userId, email, name, picture } } = await axios({
@@ -120,6 +108,7 @@ app.post('/users', checkJwt, async (req, res) => {
       },
     });
     const user = await UserService.insertUser({ pool, email, name, userId, picture });
+    console.log(user);
     res.json({ user });
   } catch (err) {
     console.log(err);
@@ -153,16 +142,9 @@ app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
 
 app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
-  // const phoneNumber = '+15005550006';
+  // const { phoneNumber } = req.body.account;
+  const phoneNumber = '+15005550006';
   try {
-    // await iap.setup();
-    // let receipt = transactionReceipt;
-    // if (platform === 'android') {
-    //   receipt = JSON.parse(receipt);
-    // }
-    // const data = await iap.validate(receipt);
-
     const result = await twilioClient.incomingPhoneNumbers
       .create({
         phoneNumber,
@@ -170,8 +152,7 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
       });
 
     const { phoneNumber: pn, sid } = result;
-    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid,
-    productId, transactionId, transactionReceipt, platform });
+    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
     res.json({ account });
   } catch (err) {
     console.log(err);
@@ -211,7 +192,7 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
 app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-  const { invitation, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.owner;
+  const { invitation } = req.body.owner;
   try {
     let [ base64Message, base64Signature ] = invitation.split('.');
 
@@ -226,9 +207,9 @@ app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
       const { publicKey } = user;
       const isValid = encryption.verify(publicKey, message, signature);
       if (isValid) {
-        const account = await AccountService.createOwner({ pool, userId, phoneNumber,
-          productId, transactionId, platform, transactionReceipt });
-        res.json({ account });
+        const owner = await AccountService.createOwner({ pool, userId, phoneNumber });
+        res.json({ owner });
+        io.to(phoneNumber).emit('did-propose');
       } else {
         res.status(400).json();
       }
@@ -250,14 +231,13 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
     if (true) {
-      const messages = await twilioClient.messages
-        .list({
-           to: phoneNumber,
-           limit: 100,
-         })
-      // const result = require('./mock-data/messages');
-      // let messages = result.default.messages;
-
+      // const messages = await twilioClient.messages
+      //   .list({
+      //      to: phoneNumber,
+      //      limit: 100,
+      //    })
+      const { default: { messages } } = require('./mock-data/messages');
+      console.log(messages);
       res.json({ messages });
     } else {
       res.status(400).json();
@@ -309,6 +289,13 @@ app.use((err, req, res, next) => {
 });
 
 const httpServer = http.createServer(app);
+io = new Server(httpServer);
+
+io.on('connection', async (socket) => {
+  socket.on('set-phone-number', async ({ phoneNumber }) => {
+    socket.join(phoneNumber);
+  });
+});
 
 httpServer.listen(PORT, () => {
   console.log(`listening on ${PORT}`);
