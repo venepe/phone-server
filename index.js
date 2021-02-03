@@ -24,6 +24,7 @@ const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
+const NODE_ENV = config.get('NODE_ENV');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 let io;
 console.log(config.get('POSTGRES_HOST'));
@@ -38,7 +39,7 @@ const options = {
 
 if (
   config.get('INSTANCE_CONNECTION_NAME') &&
-  config.get('NODE_ENV') === 'production'
+  NODE_ENV === 'production'
 ) {
   options.host = `/cloudsql/${config.get('INSTANCE_CONNECTION_NAME')}`;
 }
@@ -74,18 +75,21 @@ app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon } = req.query;
 
   try {
-    // const phoneNumbers = await twilioClient.availablePhoneNumbers('US')
-    //   .local
-    //   .list({
-    //     smsEnabled: true,
-    //     mmsEnabled: true,
-    //     voiceEnabled: true,
-    //     nearLatLong: `${lat},${lon}`,
-    //     distance: 10,
-    //     limit: 20,
-    //   });
-
-    const { default: { phoneNumbers } } = require('./mock-data/phone-numbers');
+    let phoneNumbers;
+    if (NODE_ENV === 'production') {
+      phoneNumbers = await twilioClient.availablePhoneNumbers('US')
+        .local
+        .list({
+          smsEnabled: true,
+          mmsEnabled: true,
+          voiceEnabled: true,
+          nearLatLong: `${lat},${lon}`,
+          distance: 10,
+          limit: 20,
+        });
+    } else {
+      phoneNumbers = require('./mock-data/phone-numbers').default.phoneNumbers;
+    }
     res.json({ phoneNumbers });
   } catch (err) {
     console.log(err);
@@ -95,7 +99,6 @@ app.get('/phone-numbers/available', async (req, res) => {
 
 app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
-  console.log('authorization');
   try {
     const url = `https://${AUTH0_DOMAIN}/userinfo`;
     const { data: { sub: userId, email, name, picture } } = await axios({
@@ -108,7 +111,6 @@ app.post('/users', checkJwt, async (req, res) => {
       },
     });
     const user = await UserService.insertUser({ pool, email, name, userId, picture });
-    console.log(user);
     res.json({ user });
   } catch (err) {
     console.log(err);
@@ -142,8 +144,11 @@ app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
 
 app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   let { sub: userId } = req.user;
-  // const { phoneNumber } = req.body.account;
-  const phoneNumber = '+15005550006';
+  let phoneNumber = '+15005550006';
+  if (NODE_ENV === 'production') {
+    const account = req.body.account || {};
+    phoneNumber = account.phoneNumber;
+  }
   try {
     const result = await twilioClient.incomingPhoneNumbers
       .create({
@@ -234,14 +239,17 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
 
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (true) {
-      // const messages = await twilioClient.messages
-      //   .list({
-      //      to: phoneNumber,
-      //      limit: 100,
-      //    })
-      const { default: { messages } } = require('./mock-data/messages');
-      console.log(messages);
+    if (isOwner) {
+      let messages = [];
+      if (NODE_ENV === 'production') {
+        messages = await twilioClient.messages
+          .list({
+             to: phoneNumber,
+             limit: 100,
+           })
+      } else {
+        messages = require('./mock-data/messages').default.messages;
+      }
       res.json({ messages });
     } else {
       res.status(400).json();
