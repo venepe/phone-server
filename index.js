@@ -72,28 +72,32 @@ app.post('/sms', async (req, res) => {
 });
 
 app.get('/phone-numbers/available', async (req, res) => {
-  const { lat, lon } = req.query;
-
+  const { lat, lon, query } = req.query;
   try {
     let phoneNumbers;
     if (NODE_ENV === 'production') {
+      let options = {
+        smsEnabled: true,
+        mmsEnabled: true,
+        voiceEnabled: true,
+        distance: 25,
+        limit: 20,
+      };
+      if (query && query.length === 12) {
+        options.nearNumber = query;
+      } else {
+        options.nearLatLong = `${lat},${lon}`;
+      }
       phoneNumbers = await twilioClient.availablePhoneNumbers('US')
         .local
-        .list({
-          smsEnabled: true,
-          mmsEnabled: true,
-          voiceEnabled: true,
-          nearLatLong: `${lat},${lon}`,
-          distance: 10,
-          limit: 20,
-        });
+        .list(options);
     } else {
       phoneNumbers = require('./mock-data/phone-numbers').default.phoneNumbers;
     }
     res.json({ phoneNumbers });
   } catch (err) {
     console.log(err);
-    res.status(400).json();
+    res.status(400).json({ message: 'No phone numbers found' });
   }
 });
 

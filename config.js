@@ -33,8 +33,7 @@ nconf
     DATA_BACKEND: 'cloudsql',
 
     // This is the id of your project in the Google Cloud Developers Console.
-    GCLOUD_PROJECT: 'sagegauge',
-    CLOUD_BUCKET: 'sage_media',
+    GCLOUD_PROJECT: 'bubblepop',
 
     POSTGRES_USER: '',
     POSTGRES_PASSWORD: '',
