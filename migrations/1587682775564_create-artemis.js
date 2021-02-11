@@ -171,8 +171,13 @@ exports.up = (pgm) => {
     " insert into artemis.user (id, email) values (id, email) ON CONFLICT (id) DO UPDATE SET updated_at = now() RETURNING *"
   );
 
-  pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
-     ('facebook-10102949405260058', 'vernonpearson8@gmail.com', 'Vernon Pearson');`);
+  pgm.sql(`INSERT INTO artemis.user (id, email, name, public_key) VALUES
+     ('facebook-10102949405260058', 'vernonpearson8@gmail.com', 'Vernon Pearson', '-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC35+BNrRuqd84SBBdSywdv7MFX
+V02B3FKFY4rApvIb2IGhsxPjOf/SEe8uzpf5020ZdBU0lLSi4vKZw0l0mz/k0Ul4
+wQC9IdDmFyoiPHNOcs4bGY98lcGA9D0Es8NJuq6o2WVWnvRCJ8uFwT9PUe3ooeHr
+ALOCAACRKzy88mnv3QIDAQAB
+-----END PUBLIC KEY-----');`);
 
   pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
       ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);

@@ -8,7 +8,8 @@ import moment from 'moment';
 import { Base64 } from 'js-base64';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
-import { validateProtected, validatePhoneNumber, validateInvitation } from './schemas';
+import { validateAccount, validateInvitationVerify, validateUserPulbicKey,
+  validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import UserService from './services/user';
 import encryption from './utilities/encryption';
@@ -73,8 +74,8 @@ app.post('/sms', async (req, res) => {
 
 app.get('/phone-numbers/available', async (req, res) => {
   const { lat, lon, query } = req.query;
+  let phoneNumbers = [];
   try {
-    let phoneNumbers;
     if (NODE_ENV === 'production') {
       let options = {
         smsEnabled: true,
@@ -122,7 +123,7 @@ app.post('/users', checkJwt, async (req, res) => {
   }
 });
 
-app.post('/users/public-key', checkJwt, async (req, res) => {
+app.post('/users/public-key', checkJwt, validateUserPulbicKey, async (req, res) => {
   let { sub: userId } = req.user;
   const { publicKey } = req.body.user;
   try {
@@ -134,7 +135,7 @@ app.post('/users/public-key', checkJwt, async (req, res) => {
   }
 });
 
-app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
+app.get('/accounts', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
 
   try {
@@ -146,11 +147,11 @@ app.get('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
-app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
+app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   let { sub: userId } = req.user;
   let phoneNumber = '+15005550006';
   if (NODE_ENV === 'production') {
-    const account = req.body.account || {};
+    const { account } = req.body;
     phoneNumber = account.phoneNumber;
   }
   try {
@@ -173,9 +174,8 @@ app.post('/accounts', checkJwt, validatePhoneNumber, async (req, res) => {
   }
 });
 
-app.post('/invitations/verify', checkJwt, async (req, res) => {
+app.post('/invitations/verify', checkJwt, validateInvitationVerify, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
   const { invitation } = req.body.verify;
 
   try {
@@ -202,7 +202,7 @@ app.post('/invitations/verify', checkJwt, async (req, res) => {
   }
 });
 
-app.post('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
+app.post('/accounts/:phoneNumber/owners', checkJwt, validateOwner, async (req, res) => {
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
   const { invitation } = req.body.owner;
@@ -240,11 +240,10 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
 
   let { sub: userId } = req.user;
   const { phoneNumber } = req.params;
-
+  let messages = [];
   try {
     const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
     if (isOwner) {
-      let messages = [];
       if (NODE_ENV === 'production') {
         messages = await twilioClient.messages
           .list({
@@ -286,6 +285,13 @@ app.delete('/accounts/:phoneNumber/owners/me', checkJwt, async (req, res) => {
   } catch (err) {
     console.log(err);
     res.status(400).json();
+  }
+});
+
+app.use((err, req, res, next) => {
+  if (err.name === VALIDATION_ERROR) {
+    console.log(err);
+    res.status(400).json({});
   }
 });
 
