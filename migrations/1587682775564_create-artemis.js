@@ -164,6 +164,37 @@ exports.up = (pgm) => {
   pgm.createIndex({schema: 'artemis', name: 'owner'}, 'account_id');
   pgm.createIndex({schema: 'artemis', name: 'owner'}, 'user_id');
 
+  pgm.createTable({schema: 'artemis', name: 'invitation'}, {
+    id: {
+      type: 'uuid',
+      default: new PgLiteral('uuid_generate_v4()'),
+      notNull: true,
+      primaryKey: true
+    },
+    code: {
+      notNull: true,
+      type: 'varchar' ,
+    },
+    created_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
+    },
+    updated_at: {
+     type: 'timestamptz',
+     notNull: true,
+     default: pgm.func('current_timestamp')
+    },
+   is_archived: {
+     type: 'boolean',
+     notNull: true,
+     default: false,
+   },
+ }, { comment: '@omit all' });
+
+  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'created_at');
+  pgm.createIndex({schema: 'artemis', name: 'invitation'}, 'updated_at');
+
   pgm.createFunction(
     {schema: 'artemis', name: 'logon_user'},
     [{name: 'id', type: 'text'}, {name: 'email', type: 'text'}],

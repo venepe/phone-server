@@ -11,6 +11,7 @@ import { makeKeysCamelCase } from './utilities';
 import { validateAccount, validateInvitationVerify, validateUserPulbicKey,
   validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
+import InvitationService from './services/invitation';
 import UserService from './services/user';
 import encryption from './utilities/encryption';
 import { Server } from 'socket.io';
@@ -171,6 +172,28 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
       message = 'You reached the maximum number of lines you can create in a month'
     }
     res.status(400).json({ message });
+  }
+});
+
+app.post('/invitations', checkJwt, async (req, res) => {
+  const { code } = req.body.invitation;
+  try {
+    const invitation = await InvitationService.insertInvitation({ pool, code });
+    res.json({ invitation });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/invitations/:invitationId', checkJwt, async (req, res) => {
+  const { invitationId } = req.params;
+  try {
+    const invitation = await InvitationService.selectInvitationById({ pool, invitationId });
+    res.json({ invitation });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
   }
 });
 
