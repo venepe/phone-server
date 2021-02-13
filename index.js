@@ -4,16 +4,11 @@ import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import axios from 'axios';
-import moment from 'moment';
-import { Base64 } from 'js-base64';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
-import { validateAccount, validateInvitationVerify, validateUserPulbicKey,
-  validateOwner, VALIDATION_ERROR } from './schemas';
+import { validateAccount, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
-import InvitationService from './services/invitation';
 import UserService from './services/user';
-import encryption from './utilities/encryption';
 import { Server } from 'socket.io';
 const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
@@ -73,7 +68,7 @@ app.post('/sms', async (req, res) => {
   res.end(twiml.toString());
 });
 
-app.get('/phone-numbers/available', async (req, res) => {
+app.get('/phone-numbers/available', checkJwt, async (req, res) => {
   const { lat, lon, query } = req.query;
   let phoneNumbers = [];
   try {
@@ -124,18 +119,6 @@ app.post('/users', checkJwt, async (req, res) => {
   }
 });
 
-app.post('/users/public-key', checkJwt, validateUserPulbicKey, async (req, res) => {
-  let { sub: userId } = req.user;
-  const { publicKey } = req.body.user;
-  try {
-    const user = await UserService.updatePublicKey({ pool, userId, publicKey });
-    res.json({ user });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
 app.get('/accounts', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
 
@@ -175,98 +158,28 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   }
 });
 
-app.post('/invitations', checkJwt, async (req, res) => {
-  const { code } = req.body.invitation;
-  try {
-    const invitation = await InvitationService.insertInvitation({ pool, code });
-    res.json({ invitation });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.get('/invitations/:invitationId', checkJwt, async (req, res) => {
-  const { invitationId } = req.params;
-  try {
-    const invitation = await InvitationService.selectInvitationById({ pool, invitationId });
-    res.json({ invitation });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.post('/invitations/verify', checkJwt, validateInvitationVerify, async (req, res) => {
+app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
-  const { invitation } = req.body.verify;
-
+  const { accountId } = req.params;
   try {
-    let [ base64Message, base64Signature ] = invitation.split('.');
-
-    const message = Base64.decode(base64Message);
-    const signature = Base64.decode(base64Signature);
-
-    const payload = JSON.parse(message);
-    const { userId: ownerId, phoneNumber, expires } = payload;
-
-    if (moment() < moment(expires)) {
-      const user = await UserService.selectUser({ pool, userId: ownerId });
-      const { publicKey } = user;
-      const isValid = encryption.verify(publicKey, message, signature);
-      res.json({ verify: { isValid } });
-    } else {
-      res.json({ verify: { isValid: false } });
-    }
-
+    const owner = await AccountService.createOwner({ pool, userId, accountId });
+    res.json({ owner });
+    io.to(accountId).emit('did-propose');
   } catch (err) {
     console.log(err);
     res.status(400).json();
   }
 });
 
-app.post('/accounts/:phoneNumber/owners', checkJwt, validateOwner, async (req, res) => {
-  let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
-  const { invitation } = req.body.owner;
-  try {
-    let [ base64Message, base64Signature ] = invitation.split('.');
-
-    const message = Base64.decode(base64Message);
-    const signature = Base64.decode(base64Signature);
-
-    const payload = JSON.parse(message);
-    const { userId: ownerId, phoneNumber, expires } = payload;
-
-    if (moment() < moment(expires)) {
-      const user = await UserService.selectUserAsOwner({ pool, phoneNumber, userId: ownerId });
-      const { publicKey } = user;
-      const isValid = encryption.verify(publicKey, message, signature);
-      if (isValid) {
-        const owner = await AccountService.createOwner({ pool, userId, phoneNumber });
-        res.json({ owner });
-        io.to(phoneNumber).emit('did-propose');
-      } else {
-        res.status(400).json();
-      }
-    } else {
-      res.status(400).json();
-    }
-
-  } catch (err) {
-    console.log(err);
-    res.status(400).json();
-  }
-});
-
-app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
+app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
 
   let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
+  const { accountId } = req.params;
   let messages = [];
   try {
-    const isOwner = await AccountService.isOwner({ pool, userId, phoneNumber });
-    if (isOwner) {
+    const account = await AccountService.selectAccountById({ pool, userId, accountId });
+    if (account && account.phoneNumber) {
+      const { phoneNumber } = account;
       if (NODE_ENV === 'production') {
         messages = await twilioClient.messages
           .list({
@@ -286,12 +199,12 @@ app.get('/accounts/:phoneNumber/messages', checkJwt, async (req, res) => {
   }
 });
 
-app.get('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
+app.get('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
+  const { accountId } = req.params;
 
   try {
-    const owners = await AccountService.selectOwners({ pool, userId, phoneNumber });
+    const owners = await AccountService.selectOwners({ pool, userId, accountId });
     res.json({ owners });
   } catch (err) {
     console.log(err);
@@ -299,11 +212,11 @@ app.get('/accounts/:phoneNumber/owners', checkJwt, async (req, res) => {
   }
 });
 
-app.delete('/accounts/:phoneNumber/owners/me', checkJwt, async (req, res) => {
+app.delete('/accounts/:accountId/owners/me', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
-  const { phoneNumber } = req.params;
+  const { accountId } = req.params;
   try {
-    const owner = await AccountService.deleteOwner({ pool, userId, phoneNumber });
+    const owner = await AccountService.deleteOwner({ pool, userId, accountId });
     res.json({ owner });
   } catch (err) {
     console.log(err);

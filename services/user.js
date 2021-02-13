@@ -21,13 +21,6 @@ const selectUser = async ({ pool, userId }) => {
   return user;
 }
 
-const updatePublicKey = async ({ pool, userId, publicKey }) => {
-  const update = `UPDATE artemis.user SET public_key = $1 WHERE id = $2 RETURNING *;`;
-  const result = await pool.query({ text: update, values: [publicKey, userId] });
-  let user = resultToObject(result);
-  return user;
-}
-
 const selectUserAsOwner = async ({ pool, phoneNumber, userId }) => {
   const select =
   ' SELECT * FROM artemis.user ' +
@@ -44,6 +37,5 @@ export default {
   insertUser,
   updateName,
   selectUser,
-  updatePublicKey,
   selectUserAsOwner,
 };
