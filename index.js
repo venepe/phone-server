@@ -250,8 +250,8 @@ const httpServer = http.createServer(app);
 io = new Server(httpServer);
 
 io.on('connection', async (socket) => {
-  socket.on('set-phone-number', async ({ phoneNumber }) => {
-    socket.join(phoneNumber);
+  socket.on('set-account-id', async ({ accountId }) => {
+    socket.join(accountId);
   });
 });
 
