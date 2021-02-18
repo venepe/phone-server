@@ -170,7 +170,7 @@ exports.up = (pgm) => {
      ('facebook-10102949405260058', 'vernonpearson8@gmail.com', 'Vernon Pearson');`);
 
   pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
-      ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'sid');`);
+      ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'ACd2fe81209777162c06ecfc50dd87fa84');`);
 
   pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
       ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);

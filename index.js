@@ -8,7 +8,9 @@ import config from './config';
 import { makeKeysCamelCase } from './utilities';
 import { validateAccount, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
+import NotificationService from './services/notification';
 import UserService from './services/user';
+import Messaging from './messaging';
 import { Server } from 'socket.io';
 const jwt = require('express-jwt');
 const jwtAuthz = require('express-jwt-authz');
@@ -63,13 +65,24 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
+  const { AccountSid: accountSid } = req.body;
+  const notificationTokens = await NotificationService.selectNotificationTokensByAccountSid({ pool, accountSid });
+  Messaging.sendIncomingMessage({ notificationTokens });
   const twiml = new Twilio.twiml.MessagingResponse();
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(twiml.toString());
 });
 
 app.get('/phone-numbers/available', checkJwt, async (req, res) => {
-  const { lat, lon, query } = req.query;
+  let { lat, lon, query } = req.query;
+  const DEFAULT_LOCATION = {
+    latitude: '41.8781',
+    longitude: '-87.6298',
+  };
+  if (!lat || !lon) {
+    lat = DEFAULT_LOCATION.latitude;
+    lon = DEFAULT_LOCATION.longitude;
+  }
   let phoneNumbers = [];
   try {
     if (NODE_ENV === 'production') {
@@ -221,6 +234,20 @@ app.delete('/accounts/:accountId/owners/me', checkJwt, async (req, res) => {
   } catch (err) {
     console.log(err);
     res.status(400).json();
+  }
+});
+
+app.post('/notifications', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  let { notification } = req.body || {};
+  let { notificationToken, device } = notification || {};
+
+  try {
+    await NotificationService.insertNotification({ pool, userId, notificationToken, device });
+    res.json({status: 200});
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({});
   }
 });
 

@@ -21,6 +21,7 @@ nconf
     'AUTH0_CLIENT_ID',
     'AUTH0_DOMAIN',
     'AUTH0_CLIENT_SECRET',
+    'GOOGLE_APPLICATION_CREDENTIALS',
   ])
   // 3. Config file
   .file({file: path.join(__dirname, 'config.json')})
@@ -49,6 +50,8 @@ nconf
     AUTH0_CLIENT_ID: '',
     AUTH0_DOMAIN: '',
     AUTH0_CLIENT_SECRET: '',
+
+    GOOGLE_APPLICATION_CREDENTIALS: '',
   });
 
 // Check for required settings
