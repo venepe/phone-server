@@ -171,6 +171,18 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   }
 });
 
+app.get('/accounts/:accountId', checkJwt, async (req, res) => {
+  const { accountId } = req.params;
+
+  try {
+    const account = await AccountService.selectAccountByAccountId({ pool, accountId });
+    res.json({ account });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
 app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { accountId } = req.params;
@@ -190,7 +202,7 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
   const { accountId } = req.params;
   let messages = [];
   try {
-    const account = await AccountService.selectAccountById({ pool, userId, accountId });
+    const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
     if (account && account.phoneNumber) {
       const { phoneNumber } = account;
       if (NODE_ENV === 'production') {
@@ -213,11 +225,10 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
 });
 
 app.get('/accounts/:accountId/owners', checkJwt, async (req, res) => {
-  let { sub: userId } = req.user;
   const { accountId } = req.params;
 
   try {
-    const owners = await AccountService.selectOwners({ pool, userId, accountId });
+    const owners = await AccountService.selectOwners({ pool, accountId });
     res.json({ owners });
   } catch (err) {
     console.log(err);

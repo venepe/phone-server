@@ -92,7 +92,20 @@ const deleteOwner = async ({ pool, userId, accountId }) => {
   return { success: true };
 }
 
-const selectAccountById = async ({ pool, userId, accountId }) => {
+const selectAccountByAccountId = async ({ pool, accountId }) => {
+  const select =
+  ' SELECT artemis.account.phone_number, artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
+  ' FROM artemis.account ' +
+  ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
+  ' WHERE artemis.account.id = $1 ';
+  const result = await pool.query({ text: select, values: [ accountId ] });
+  let account = resultToObject(result);
+  const owners = await selectOwners({ pool, accountId });
+  account.owners = owners;
+  return account;
+}
+
+const selectAccountByAccountIdAndUserId = async ({ pool, userId, accountId }) => {
   const select =
   ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
   ' FROM artemis.account ' +
@@ -104,7 +117,7 @@ const selectAccountById = async ({ pool, userId, accountId }) => {
   return account;
 }
 
-const selectOwners = async ({ pool, userId, accountId }) => {
+const selectOwners = async ({ pool, accountId }) => {
   const select =
   ' SELECT * ' +
   ' FROM artemis.user ' +
@@ -123,7 +136,8 @@ export default {
   createAccount,
   createOwner,
   deleteOwner,
-  selectAccountById,
+  selectAccountByAccountId,
+  selectAccountByAccountIdAndUserId,
   selectAccounts,
   selectOwners,
 };
