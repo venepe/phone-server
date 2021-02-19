@@ -167,7 +167,7 @@ exports.up = (pgm) => {
   );
 
   pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
-     ('facebook-10102949405260058', 'vernonpearson8@gmail.com', 'Vernon Pearson');`);
+     ('facebook-10102949405260058', 'jamiekennedy8@gmail.com', 'Jamie Kennedy');`);
 
   pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
       ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'ACd2fe81209777162c06ecfc50dd87fa84');`);
