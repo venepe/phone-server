@@ -3,11 +3,11 @@ import http from 'http';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
-import axios from 'axios';
 import config from './config';
 import { makeKeysCamelCase } from './utilities';
 import { validateAccount, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
+import Auth0Service from './services/auth0';
 import NotificationService from './services/notification';
 import UserService from './services/user';
 import Messaging from './messaging';
@@ -18,7 +18,6 @@ const jwksRsa = require('jwks-rsa');
 const { Pool } = require('pg');
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
-const AUTH0_CLIENT_ID = config.get('AUTH0_CLIENT_ID');
 const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
@@ -114,16 +113,7 @@ app.get('/phone-numbers/available', checkJwt, async (req, res) => {
 app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
   try {
-    const url = `https://${AUTH0_DOMAIN}/userinfo`;
-    const { data: { sub: userId, email, name, picture } } = await axios({
-      method: 'GET',
-      url,
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: authorization,
-      },
-    });
+    const { data: { sub: userId, email, name, picture } } = await Auth0Service.getUserInfo({ authorization });
     const user = await UserService.insertUser({ pool, email, name, userId, picture });
     res.json({ user });
   } catch (err) {
@@ -145,6 +135,7 @@ app.get('/accounts', checkJwt, async (req, res) => {
 });
 
 app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
+  let authorization = req.headers.authorization;
   let { sub: userId } = req.user;
   let phoneNumber = '+15005550006';
   if (NODE_ENV === 'production') {
@@ -152,15 +143,19 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
     phoneNumber = account.phoneNumber;
   }
   try {
-    const result = await twilioClient.incomingPhoneNumbers
-      .create({
-        phoneNumber,
-        smsUrl: TWILIO_SMS_URL,
-      });
-
-    const { phoneNumber: pn, sid } = result;
-    const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
-    res.json({ account });
+    const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
+    if (email_verified) {
+      const result = await twilioClient.incomingPhoneNumbers
+        .create({
+          phoneNumber,
+          smsUrl: TWILIO_SMS_URL,
+        });
+      const { phoneNumber: pn, sid } = result;
+      const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
+      res.json({ account });
+    } else {
+      return res.status(403).json({ message: 'Please verify email' });
+    }
   } catch (err) {
     console.log(err);
     let message = '';
@@ -256,6 +251,22 @@ app.post('/notifications', checkJwt, async (req, res) => {
   try {
     await NotificationService.insertNotification({ pool, userId, notificationToken, device });
     res.json({status: 200});
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({});
+  }
+});
+
+app.post('/verification-email', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+
+  try {
+    const result = await Auth0Service.postResendVerificationEmail({ userId });
+    if (result) {
+      res.json({status: 200});
+    } else {
+      res.status(400).json({});
+    }
   } catch (err) {
     console.log(err);
     res.status(400).json({});
