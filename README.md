@@ -10,6 +10,7 @@ docker-compose up
 yarn
 yarn migrate up
 export POSTGRES_USER=postgres POSTGRES_PASSWORD=supersecretpswd POSTGRES_DATABASE=postgres
+export GOOGLE_APPLICATION_CREDENTIALS="./secrets/firebase-adminsdk.json"
 yarn watch
 ```
 
