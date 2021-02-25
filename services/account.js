@@ -1,5 +1,6 @@
 import { resultToObject, resultToArray } from '../utilities';
 const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 1;
+const MAX_OWNERS_PER_USER = 1;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
@@ -26,22 +27,30 @@ const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
   try {
     await pool.query('BEGIN')
 
-    const selectReceipt = 'SELECT COUNT(*) FROM artemis.receipt WHERE user_id = $1';
-    const resultCount = await pool.query({ text: selectReceipt, values: [ userId ] });
-    let { count } = resultToObject(resultCount);
+    const selectOwner = 'SELECT COUNT(*) FROM artemis.owner WHERE user_id = $1';
+    const resultOwnerCount = await pool.query({ text: selectOwner, values: [ userId ] });
+    let { count: ownerCount } = resultToObject(resultOwnerCount);
 
-    if (count < MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE) {
-      const insertAccount = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
-      const resultAccount = await pool.query({ text: insertAccount, values: [ phoneNumber, sid ] });
-      account = resultToObject(resultAccount);
+    if (ownerCount < MAX_OWNERS_PER_USER) {
+      const selectReceipt = 'SELECT COUNT(*) FROM artemis.receipt WHERE user_id = $1';
+      const resultCount = await pool.query({ text: selectReceipt, values: [ userId ] });
+      let { count } = resultToObject(resultCount);
 
-      const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
-      await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+      if (count < MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE) {
+        const insertAccount = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
+        const resultAccount = await pool.query({ text: insertAccount, values: [ phoneNumber, sid ] });
+        account = resultToObject(resultAccount);
 
-      const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id) VALUES($1, $2) RETURNING *;';
-      await pool.query({ text: insertReceipt, values: [ account.id, userId ] });
+        const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
+        await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+
+        const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id) VALUES($1, $2) RETURNING *;';
+        await pool.query({ text: insertReceipt, values: [ account.id, userId ] });
+      } else {
+        throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
+      }
     } else {
-      throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
+      throw new Error('MAX_OWNERS_PER_USER');
     }
 
     await pool.query('COMMIT')
@@ -58,26 +67,34 @@ const createOwner = async ({ pool, userId, accountId }) => {
   try {
     await pool.query('BEGIN');
 
-    const select = `SELECT * FROM artemis.account WHERE id = $1 LIMIT 1;`;
-    const result = await pool.query({ text: select, values: [accountId] });
-    const account = resultToObject(result);
+    const selectOwner = 'SELECT COUNT(*) FROM artemis.owner WHERE user_id = $1';
+    const resultOwnerCount = await pool.query({ text: selectOwner, values: [ userId ] });
+    let { count: ownerCount } = resultToObject(resultOwnerCount);
 
-    const update = 'UPDATE artemis.account SET is_active = true WHERE artemis.account.id = $1;';
-    await pool.query({ text: update, values: [ account.id ] });
+    if (ownerCount < MAX_OWNERS_PER_USER) {
+      const select = `SELECT * FROM artemis.account WHERE id = $1 LIMIT 1;`;
+      const result = await pool.query({ text: select, values: [accountId] });
+      const account = resultToObject(result);
 
-    const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
-    await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+      const update = 'UPDATE artemis.account SET is_active = true WHERE artemis.account.id = $1;';
+      await pool.query({ text: update, values: [ account.id ] });
 
-    const selectOwner =
-    ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.owner.id, artemis.account.id AS accountId ' +
-    ' FROM artemis.account ' +
-    ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
-    ' WHERE artemis.account.id = $1 ' +
-    ' AND artemis.owner.user_id = $2 ';
-    const resultOwner = await pool.query({ text: selectOwner, values: [ accountId, userId ] });
-    owner = resultToObject(resultOwner);
+      const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
+      await pool.query({ text: insertOwner, values: [ account.id, userId ] });
 
-    await pool.query('COMMIT')
+      const selectOwner =
+      ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.owner.id, artemis.account.id AS accountId ' +
+      ' FROM artemis.account ' +
+      ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
+      ' WHERE artemis.account.id = $1 ' +
+      ' AND artemis.owner.user_id = $2 ';
+      const resultOwner = await pool.query({ text: selectOwner, values: [ accountId, userId ] });
+      owner = resultToObject(resultOwner);
+
+      await pool.query('COMMIT')
+    } else {
+      throw new Error('MAX_OWNERS_PER_USER');
+    }
   } catch (e) {
     await pool.query('ROLLBACK')
     throw e;

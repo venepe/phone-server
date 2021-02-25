@@ -72,7 +72,7 @@ app.post('/sms', async (req, res) => {
   res.end(twiml.toString());
 });
 
-app.get('/phone-numbers/available', checkJwt, async (req, res) => {
+app.get('/phone-numbers/available', async (req, res) => {
   let { lat, lon, query } = req.query;
   const DEFAULT_LOCATION = {
     latitude: '41.8781',
@@ -159,14 +159,16 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   } catch (err) {
     console.log(err);
     let message = '';
-    if (err.message === 'MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE') {
-      message = 'You reached the maximum number of lines you can create in a month'
+    if (err.message === 'MAX_OWNERS_PER_USER') {
+      message = 'You already have a number!';
+    } else if (err.message === 'MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE') {
+      message = 'You reached the maximum number of lines you can create in a month';
     }
     res.status(400).json({ message });
   }
 });
 
-app.get('/accounts/:accountId', checkJwt, async (req, res) => {
+app.get('/accounts/:accountId', async (req, res) => {
   const { accountId } = req.params;
 
   try {
@@ -187,7 +189,11 @@ app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
     io.to(accountId).emit('did-propose');
   } catch (err) {
     console.log(err);
-    res.status(400).json();
+    let message = '';
+    if (err.message === 'MAX_OWNERS_PER_USER') {
+      message = 'You already have a number!';
+    }
+    res.status(400).json({ message });
   }
 });
 
