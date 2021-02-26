@@ -4,7 +4,7 @@ import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
-import { makeKeysCamelCase } from './utilities';
+import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
 import { validateAccount, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
@@ -92,8 +92,8 @@ app.get('/phone-numbers/available', async (req, res) => {
         distance: 25,
         limit: 20,
       };
-      if (query && query.length === 12) {
-        options.nearNumber = query;
+      if (query && query.length > 0) {
+        options.contains = finishAndFormatNumber(query);
       } else {
         options.nearLatLong = `${lat},${lon}`;
       }

@@ -34,3 +34,17 @@ export const resultToArray = (result) => {
     return null;
   }
 }
+
+export const finishAndFormatNumber = (phoneNumber = '') => {
+  phoneNumber = phoneNumber.replace(/\D/g,'');
+  if (phoneNumber[0] == '1') {
+    phoneNumber = phoneNumber.substring(1);
+  }
+  if (phoneNumber.length > 10) {
+    phoneNumber = phoneNumber.substring(0, 10);
+  }
+  while (phoneNumber.length < 10) {
+    phoneNumber = `${phoneNumber}*`;
+  }
+  return phoneNumber;
+}
