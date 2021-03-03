@@ -23,6 +23,29 @@ const sendIncomingMessage = ({ notificationTokens = [] }) => {
   }
 }
 
+const sendWelcomeMessage = ({ notificationTokens = [] }) => {
+  if (notificationTokens.length > 0) {
+    const title = 'Congratulations! 🎉🎉🎉';
+    const body = 'Your account is active! You\'re sharing a number!';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
 export default {
   sendIncomingMessage,
+  sendWelcomeMessage,
 };

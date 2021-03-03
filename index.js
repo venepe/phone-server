@@ -26,6 +26,7 @@ const NODE_ENV = config.get('NODE_ENV');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 let io;
 console.log(config.get('POSTGRES_HOST'));
+console.log(process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
 const options = {
   user: config.get('POSTGRES_USER'),
@@ -64,9 +65,13 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
-  const { AccountSid: accountSid } = req.body;
-  const notificationTokens = await NotificationService.selectNotificationTokensByAccountSid({ pool, accountSid });
-  Messaging.sendIncomingMessage({ notificationTokens });
+  const { To: phoneNumber } = req.body;
+  try {
+    const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
+    Messaging.sendIncomingMessage({ notificationTokens });
+  } catch (e) {
+    console.log(e);
+  }
   const twiml = new Twilio.twiml.MessagingResponse();
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(twiml.toString());
@@ -116,6 +121,17 @@ app.post('/users', checkJwt, async (req, res) => {
     const { data: { sub: userId, email, name, picture } } = await Auth0Service.getUserInfo({ authorization });
     const user = await UserService.insertUser({ pool, email, name, userId, picture });
     res.json({ user });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/users/logout', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  try {
+    await NotificationService.deleteNotificationTokensByUserId({ pool, userId });
+    res.json({ });
   } catch (err) {
     console.log(err);
     res.status(400).json();
@@ -186,6 +202,8 @@ app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   try {
     const owner = await AccountService.createOwner({ pool, userId, accountId });
     res.json({ owner });
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+    Messaging.sendWelcomeMessage({ notificationTokens });
     io.to(accountId).emit('did-propose');
   } catch (err) {
     console.log(err);
