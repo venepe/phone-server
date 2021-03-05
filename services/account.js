@@ -11,7 +11,7 @@ const insertAccount = async ({ pool, phoneNumber, sid }) => {
 
 const selectAccounts = async ({ pool, userId }) => {
   const select =
-  ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
+  ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id, artemis.account.created_at ' +
   ' FROM artemis.owner ' +
   ' JOIN artemis.account ON (artemis.owner.account_id = artemis.account.id) ' +
   ' WHERE artemis.owner.user_id = $1 ' +
@@ -111,7 +111,7 @@ const deleteOwner = async ({ pool, userId, accountId }) => {
 
 const selectAccountByAccountId = async ({ pool, accountId }) => {
   const select =
-  ' SELECT artemis.account.phone_number, artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
+  ' SELECT artemis.account.phone_number, artemis.account.phone_number, artemis.account.is_active, artemis.account.id, artemis.account.created_at ' +
   ' FROM artemis.account ' +
   ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
   ' WHERE artemis.account.id = $1 ';
@@ -124,7 +124,7 @@ const selectAccountByAccountId = async ({ pool, accountId }) => {
 
 const selectAccountByAccountIdAndUserId = async ({ pool, userId, accountId }) => {
   const select =
-  ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id ' +
+  ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id, artemis.account.created_at ' +
   ' FROM artemis.account ' +
   ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
   ' WHERE artemis.account.id = $1 ' +
