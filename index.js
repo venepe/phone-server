@@ -5,7 +5,7 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
 import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
-import { validateAccount, validateOwner, VALIDATION_ERROR } from './schemas';
+import { validateAccount, validateMessage, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
 import NotificationService from './services/notification';
@@ -65,8 +65,11 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
-  const { To: phoneNumber } = req.body;
+  const message = req.body;
+  const { To: phoneNumber } = message;
   try {
+    const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
+    io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
     Messaging.sendIncomingMessage({ notificationTokens });
   } catch (e) {
@@ -234,6 +237,29 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
         messages = require('./mock-data/messages').default.messages;
       }
       res.json({ messages });
+    } else {
+      res.status(400).json();
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req, res) => {
+
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  const { text, to } = req.body.message;
+
+  try {
+    const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
+    if (account && account.phoneNumber) {
+      const { phoneNumber: from } = account;
+      const message = await twilioClient.messages
+        .create({ body: text, from, to });
+        console.log(message);
+      res.json({ message });
     } else {
       res.status(400).json();
     }

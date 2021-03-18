@@ -19,3 +19,24 @@ export const validateAccount = async (req, res, next) => {
     next(err);
   }
 };
+
+const MessageSchema = Yup.object().shape({
+  text: Yup.string()
+    .trim()
+    .required('Required'),
+  to: Yup.string()
+    .trim()
+    .required('Required'),
+});
+
+export const validateMessage = async (req, res, next) => {
+  let { message } = req.body;
+  try {
+    message = await MessageSchema.validate(message);
+    req.body.message = message;
+    next();
+  } catch (err) {
+    console.log(err);
+    next(err);
+  }
+};

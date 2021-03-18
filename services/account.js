@@ -122,6 +122,16 @@ const selectAccountByAccountId = async ({ pool, accountId }) => {
   return account;
 }
 
+const selectAccountByPhoneNumber = async ({ pool, phoneNumber }) => {
+  const select =
+  ' SELECT * ' +
+  ' FROM artemis.account ' +
+  ' WHERE artemis.account.phone_number = $1 ';
+  const result = await pool.query({ text: select, values: [ phoneNumber ] });
+  let account = resultToObject(result);
+  return account;
+}
+
 const selectAccountByAccountIdAndUserId = async ({ pool, userId, accountId }) => {
   const select =
   ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id, artemis.account.created_at ' +
@@ -155,6 +165,7 @@ export default {
   deleteOwner,
   selectAccountByAccountId,
   selectAccountByAccountIdAndUserId,
+  selectAccountByPhoneNumber,
   selectAccounts,
   selectOwners,
 };
