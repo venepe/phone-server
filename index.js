@@ -258,7 +258,8 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
       const { phoneNumber: from } = account;
       const message = await twilioClient.messages
         .create({ body: text, from, to });
-        console.log(message);
+      const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: from });
+      io.to(accountId).emit('did-receive-message', { message });
       res.json({ message });
     } else {
       res.status(400).json();
@@ -348,8 +349,8 @@ app.use((err, req, res, next) => {
 const httpServer = http.createServer(app);
 io = new Server(httpServer);
 
-io.on('connection', async (socket) => {
-  socket.on('set-account-id', async ({ accountId }) => {
+io.on('connection', (socket) => {
+  socket.on('set-account-id', ({ accountId }) => {
     socket.join(accountId);
   });
 });
