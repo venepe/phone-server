@@ -65,8 +65,8 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
-  const message = req.body;
-  const { To: phoneNumber } = message;
+  const message = makeKeysCamelCase(req.body);
+  const { to: phoneNumber } = message;
   try {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
     io.to(accountId).emit('did-receive-message', { message });
@@ -228,11 +228,19 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
     if (account && account.phoneNumber) {
       const { phoneNumber } = account;
       if (NODE_ENV === 'production') {
-        messages = await twilioClient.messages
+        let toMessages = twilioClient.messages
           .list({
              to: phoneNumber,
              limit: 100,
-           })
+           });
+        let fromMessages = twilioClient.messages
+          .list({
+            from: phoneNumber,
+            limit: 100,
+          });
+        let results = await Promise.all([toMessages, fromMessages]);
+        messages = results[0].concat(results[1]);
+        messages = messages.sort((a, b) => b.dateCreated - a.dateCreated);
       } else {
         messages = require('./mock-data/messages').default.messages;
       }
