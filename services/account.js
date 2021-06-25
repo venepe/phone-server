@@ -1,5 +1,5 @@
 import { resultToObject, resultToArray } from '../utilities';
-const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 1;
+const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 4;
 const MAX_OWNERS_PER_USER = 1;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
