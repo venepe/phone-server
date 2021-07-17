@@ -22,6 +22,8 @@ const PORT = config.get('PORT');
 const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
+const TWILIO_API_KEY = config.get('TWILIO_API_KEY');
+const TWILIO_OUTGOING_APP_SID = config.get('TWILIO_OUTGOING_APP_SID');
 const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
 const NODE_ENV = config.get('NODE_ENV');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
@@ -71,7 +73,7 @@ app.post('/sms', async (req, res) => {
   try {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
     message.accountId = accountId;
-    MessageService.insertMessage(message);
+    // MessageService.insertMessage(message);
     io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
     Messaging.sendIncomingMessage({ notificationTokens });
@@ -280,6 +282,68 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
     console.log(err);
     res.status(400).json();
   }
+});
+
+app.post('/make-call', async (req, res) => {
+  console.log(req.body);
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end();
+});
+
+app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
+
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  let calls = [];
+  try {
+    const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
+    if (account && account.phoneNumber) {
+      const { phoneNumber } = account;
+      if (NODE_ENV === 'production') {
+        let toCalls = twilioClient.calls
+          .list({
+             to: phoneNumber,
+             limit: 100,
+           });
+        let fromCalls = twilioClient.calls
+          .list({
+            from: phoneNumber,
+            limit: 100,
+          });
+        let results = await Promise.all([toCalls, fromCalls]);
+        calls = results[0].concat(results[1]);
+        calls.map((call) => makeKeysCamelCase(call));
+        calls = calls.sort((a, b) => b.dateCreated - a.dateCreated);
+      } else {
+        calls = require('./mock-data/calls').default.calls;
+        calls = calls.map((call) => makeKeysCamelCase(call));
+        console.log(calls);
+      }
+      res.json({ calls });
+    } else {
+      res.status(400).json();
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/accounts/:accountId/activation-token', checkJwt, async (req, res) => {
+  const { accountId } = req.params;
+  const identity = accountId;
+  const AccessToken = Twilio.jwt.AccessToken;
+  const VoiceGrant = AccessToken.VoiceGrant;
+  const voiceGrant = new VoiceGrant({
+    outgoingApplicationSid: TWILIO_OUTGOING_APP_SID,
+    endpointId: TWILIO_OUTGOING_APP_SID,
+    incomingAllow: true,
+  });
+  const token = new AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_AUTH_TOKEN);
+  token.addGrant(voiceGrant);
+  token.identity = identity;
+  const activationToken = token.toJwt();
+  res.json({ activationToken });
 });
 
 app.get('/accounts/:accountId/owners', checkJwt, async (req, res) => {
