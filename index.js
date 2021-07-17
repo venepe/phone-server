@@ -8,6 +8,7 @@ import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
 import { validateAccount, validateMessage, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
+import MessageService from './services/message';
 import NotificationService from './services/notification';
 import UserService from './services/user';
 import Messaging from './messaging';
@@ -65,10 +66,12 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
-  const message = makeKeysCamelCase(req.body);
+  let message = makeKeysCamelCase(req.body);
   const { to: phoneNumber } = message;
   try {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
+    message.accountId = accountId;
+    MessageService.insertMessage(message);
     io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
     Messaging.sendIncomingMessage({ notificationTokens });
@@ -204,9 +207,10 @@ app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   const { accountId } = req.params;
   try {
     const owner = await AccountService.createOwner({ pool, userId, accountId });
+    const { name } = owner;
     res.json({ owner });
     const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
-    Messaging.sendWelcomeMessage({ notificationTokens });
+    Messaging.sendWelcomeMessage({ notificationTokens, name });
     io.to(accountId).emit('did-propose');
   } catch (err) {
     console.log(err);

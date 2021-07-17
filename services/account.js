@@ -83,9 +83,10 @@ const createOwner = async ({ pool, userId, accountId }) => {
       await pool.query({ text: insertOwner, values: [ account.id, userId ] });
 
       const selectOwner =
-      ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.owner.id, artemis.account.id AS accountId ' +
+      ' SELECT artemis.user.name, artemis.account.phone_number, artemis.account.is_active, artemis.owner.id, artemis.account.id AS accountId ' +
       ' FROM artemis.account ' +
       ' JOIN artemis.owner ON (artemis.account.id = artemis.owner.account_id) ' +
+      ' JOIN artemis.user ON (artemis.owner.user_id = artemis.user.id) ' +
       ' WHERE artemis.account.id = $1 ' +
       ' AND artemis.owner.user_id = $2 ';
       const resultOwner = await pool.query({ text: selectOwner, values: [ accountId, userId ] });
