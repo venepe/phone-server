@@ -23,6 +23,7 @@ const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const TWILIO_API_KEY = config.get('TWILIO_API_KEY');
+const TWILIO_API_SECRET = config.get('TWILIO_API_SECRET');
 const TWILIO_OUTGOING_APP_SID = config.get('TWILIO_OUTGOING_APP_SID');
 const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
 const NODE_ENV = config.get('NODE_ENV');
@@ -285,9 +286,16 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
 });
 
 app.post('/make-call', async (req, res) => {
-  console.log(req.body);
+  let call = makeKeysCamelCase(req.body);
+  const { to } = call;
+  let callerNumber = '+14257286906';
+  console.log('here');
+  const voiceResponse = new Twilio.twiml.VoiceResponse();
+  const dial = voiceResponse.dial({ callerId : callerNumber });
+  dial.number(to);
   res.writeHead(200, {'Content-Type': 'text/xml'});
-  res.end();
+  res.end(voiceResponse.toString());
+  console.log('Response:' + voiceResponse.toString());
 });
 
 app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
@@ -317,7 +325,6 @@ app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
       } else {
         calls = require('./mock-data/calls').default.calls;
         calls = calls.map((call) => makeKeysCamelCase(call));
-        console.log(calls);
       }
       res.json({ calls });
     } else {
@@ -336,10 +343,9 @@ app.get('/accounts/:accountId/activation-token', checkJwt, async (req, res) => {
   const VoiceGrant = AccessToken.VoiceGrant;
   const voiceGrant = new VoiceGrant({
     outgoingApplicationSid: TWILIO_OUTGOING_APP_SID,
-    endpointId: TWILIO_OUTGOING_APP_SID,
     incomingAllow: true,
   });
-  const token = new AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_AUTH_TOKEN);
+  const token = new AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET);
   token.addGrant(voiceGrant);
   token.identity = identity;
   const activationToken = token.toJwt();
