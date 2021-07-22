@@ -1,4 +1,4 @@
-import { resultToObject } from '../utilities';
+import { resultToObject, resultToArray } from '../utilities';
 
 const insertUser = async ({ pool, userId, email, name, picture }) => {
   const insert = 'INSERT INTO artemis.user(id, email, name, picture) VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET updated_at = NOW(), email = $2, picture = $4 RETURNING *;';
@@ -33,9 +33,22 @@ const selectUserAsOwner = async ({ pool, phoneNumber, userId }) => {
   return user;
 }
 
+const selectUsersByPhoneNumber = async ({ pool, phoneNumber }) => {
+  const select =
+  ' SELECT * FROM artemis.user ' +
+  ' JOIN artemis.owner ON (artemis.user.id = artemis.owner.user_id) ' +
+  ' JOIN artemis.account ON (artemis.owner.account_id = artemis.account.id) ' +
+  ' WHERE artemis.account.phone_number = $1 ' +
+  ' LIMIT 10 ';
+  const result = await pool.query({ text: select, values: [phoneNumber] });
+  let users = resultToArray(result);
+  return users;
+}
+
 export default {
   insertUser,
   updateName,
   selectUser,
   selectUserAsOwner,
+  selectUsersByPhoneNumber,
 };

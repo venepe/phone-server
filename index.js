@@ -25,7 +25,11 @@ const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const TWILIO_API_KEY = config.get('TWILIO_API_KEY');
 const TWILIO_API_SECRET = config.get('TWILIO_API_SECRET');
 const TWILIO_OUTGOING_APP_SID = config.get('TWILIO_OUTGOING_APP_SID');
-const TWILIO_SMS_URL = 'https://api.anumberforus.com/sms';
+const TWILIO_PUSH_CREDENTIAL_SID_ANDROID = config.get('TWILIO_PUSH_CREDENTIAL_SID_ANDROID');
+const TWILIO_PUSH_CREDENTIAL_SID_IOS = config.get('TWILIO_PUSH_CREDENTIAL_SID_IOS');
+const API_URL = config.get('API_URL');
+const TWILIO_SMS_URL = `${API_URL}/sms`;
+const TWILIO_VOICE_URL = `${API_URL}/receive-call`;
 const NODE_ENV = config.get('NODE_ENV');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 let io;
@@ -84,6 +88,25 @@ app.post('/sms', async (req, res) => {
   const twiml = new Twilio.twiml.MessagingResponse();
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(twiml.toString());
+});
+
+app.post('/voice', async (req, res) => {
+  let call = makeKeysCamelCase(req.body);
+  console.log(call);
+  const { to, from } = call;
+  const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
+  console.log(users);
+  console.log('here');
+  const voiceResponse = new Twilio.twiml.VoiceResponse();
+  const dial = voiceResponse.dial();
+  users.map(({ userId }) => {
+    const userIdBase64Encoded = Buffer.from(userId).toString('base64');
+    const client = dial.client();
+    client.identity(userIdBase64Encoded);
+  });
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end(voiceResponse.toString());
+  console.log('Response:' + voiceResponse.toString());
 });
 
 app.get('/phone-numbers/available', async (req, res) => {
@@ -174,6 +197,7 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
         .create({
           phoneNumber,
           smsUrl: TWILIO_SMS_URL,
+          voiceUrl: TWILIO_VOICE_URL,
         });
       const { phoneNumber: pn, sid } = result;
       const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
@@ -287,12 +311,25 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
 
 app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
-  const { to } = call;
-  let callerNumber = '+14257286906';
-  console.log('here');
+  console.log(call);
+  const { to, from, caller } = call;
+  let userIdBase64Encoded = caller.replace('client:', '');
+  console.log(userIdBase64Encoded);
+  let userId = Buffer.from(userIdBase64Encoded, 'base64').toString('utf8');
+  let accountId = from;
+  console.log(userId);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
-  const dial = voiceResponse.dial({ callerId : callerNumber });
-  dial.number(to);
+  let callerNumber;
+  try {
+    const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
+    if (account && account.phoneNumber) {
+      callerNumber = account.phoneNumber
+      const dial = voiceResponse.dial({ callerId : callerNumber });
+      dial.number(to);
+    }
+  } catch (err) {
+    console.log(err);
+  }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
   console.log('Response:' + voiceResponse.toString());
@@ -337,18 +374,30 @@ app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
 });
 
 app.get('/accounts/:accountId/activation-token', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  console.log(userId);
   const { accountId } = req.params;
-  const identity = accountId;
+  const { platform } = req.query;
+  let pushCredentialSid = TWILIO_PUSH_CREDENTIAL_SID_IOS;
+  if (platform === 'android') {
+    pushCredentialSid = TWILIO_PUSH_CREDENTIAL_SID_ANDROID;
+  }
+  console.log(pushCredentialSid);
+  console.log(accountId);
+  const userIdBase64Encoded = Buffer.from(userId).toString('base64');
+  const identity = userIdBase64Encoded;
   const AccessToken = Twilio.jwt.AccessToken;
   const VoiceGrant = AccessToken.VoiceGrant;
   const voiceGrant = new VoiceGrant({
     outgoingApplicationSid: TWILIO_OUTGOING_APP_SID,
     incomingAllow: true,
+    pushCredentialSid,
   });
-  const token = new AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET);
+  const token = new AccessToken(TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET, { identity });
   token.addGrant(voiceGrant);
   token.identity = identity;
   const activationToken = token.toJwt();
+  console.log(activationToken);
   res.json({ activationToken });
 });
 
