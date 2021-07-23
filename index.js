@@ -30,6 +30,7 @@ const TWILIO_PUSH_CREDENTIAL_SID_IOS = config.get('TWILIO_PUSH_CREDENTIAL_SID_IO
 const API_URL = config.get('API_URL');
 const TWILIO_SMS_URL = `${API_URL}/sms`;
 const TWILIO_VOICE_URL = `${API_URL}/receive-call`;
+const TWILIO_VOICE_STATUS_URL = `${API_URL}/call-status`;
 const NODE_ENV = config.get('NODE_ENV');
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 let io;
@@ -101,7 +102,13 @@ app.post('/voice', async (req, res) => {
   const dial = voiceResponse.dial();
   users.map(({ userId }) => {
     const userIdBase64Encoded = Buffer.from(userId).toString('base64');
-    const client = dial.client();
+    const client = dial.client(
+      {
+        statusCallbackEvent: 'initiated ringing answered no-answer completed',
+        statusCallback: TWILIO_VOICE_STATUS_URL,
+        statusCallbackMethod: 'POST',
+      }
+    );
     client.identity(userIdBase64Encoded);
   });
   res.writeHead(200, {'Content-Type': 'text/xml'});
@@ -325,7 +332,12 @@ app.post('/make-call', async (req, res) => {
     if (account && account.phoneNumber) {
       callerNumber = account.phoneNumber
       const dial = voiceResponse.dial({ callerId : callerNumber });
-      dial.number(to);
+      dial.number(
+        {
+          statusCallbackEvent: 'initiated ringing answered no-answer completed',
+          statusCallback: TWILIO_VOICE_STATUS_URL,
+          statusCallbackMethod: 'POST',
+        }, to);
     }
   } catch (err) {
     console.log(err);
@@ -333,6 +345,13 @@ app.post('/make-call', async (req, res) => {
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
   console.log('Response:' + voiceResponse.toString());
+});
+
+app.post('/call-status', async (req, res) => {
+  let call = makeKeysCamelCase(req.body);
+  console.log(call);
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end();
 });
 
 app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
