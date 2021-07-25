@@ -295,7 +295,7 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
     const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
     if (account && account.phoneNumber) {
       const { phoneNumber: from } = account;
-      const message = await twilioClient.messages
+      let message = await twilioClient.messages
         .create({ body: text, from, to });
       const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: from });
       message.accountId = accountId;
@@ -315,8 +315,10 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
 app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   console.log(call);
-  const { to, from, caller } = call;
+  const { to, from, caller, callStatus, callSid } = call;
   call.conversation = to;
+  call.status = callStatus;
+  call.sid = callSid;
   call.direction = 'outbound-api';
   let userIdBase64Encoded = caller.replace('client:', '');
   console.log(userIdBase64Encoded);
@@ -329,7 +331,8 @@ app.post('/make-call', async (req, res) => {
   try {
     const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
     if (account && account.phoneNumber) {
-      callerNumber = account.phoneNumber
+      callerNumber = account.phoneNumber;
+      call.from = callerNumber;
       const dial = voiceResponse.dial({ callerId : callerNumber });
       dial.number(
         {
