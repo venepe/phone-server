@@ -5,7 +5,8 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
 import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
-import { validateAccount, validateMessage, validateOwner, VALIDATION_ERROR } from './schemas';
+import { validateAccount, validateMessage, validateOwner,
+  validateUpdateUser, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
 import CallService from './services/call';
@@ -175,6 +176,39 @@ app.post('/users', checkJwt, async (req, res) => {
   } catch (err) {
     console.log(err);
     res.status(400).json();
+  }
+});
+
+app.get('/users/me', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  try {
+    const user = await UserService.selectUser({ pool, userId });
+    res.status(200).json({
+      user : {
+        id: user.id,
+        name: user.name,
+      },
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({});
+  }
+});
+
+app.put('/users/me', checkJwt, validateUpdateUser, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { name  } = req.body.user;
+  try {
+    const user = await UserService.updateName({ pool, userId, name });
+    res.status(200).json({
+      user : {
+        id: user.id,
+        name: user.name,
+      },
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({});
   }
 });
 

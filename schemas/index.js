@@ -40,3 +40,22 @@ export const validateMessage = async (req, res, next) => {
     next(err);
   }
 };
+
+const UserSchema = Yup.object().shape({
+  name: Yup.string()
+    .min(2, 'Too Short!')
+    .max(128, 'Too Long!')
+    .required('Required'),
+});
+
+export const validateUpdateUser = async (req, res, next) => {
+  let { user } = req.body || {};
+  console.log(user);
+  try {
+    user = await UserSchema.validate(user);
+    req.body.user = user;
+    next();
+  } catch (e) {
+    res.send(400).json({});
+  }
+};
