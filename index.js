@@ -8,6 +8,7 @@ import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
 import { validateAccount, validateMessage, validateOwner, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
+import CallService from './services/call';
 import MessageService from './services/message';
 import NotificationService from './services/notification';
 import UserService from './services/user';
@@ -75,11 +76,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/sms', async (req, res) => {
   let message = makeKeysCamelCase(req.body);
+  message.direction = 'inbound';
+  message.sid = message.messageSid;
+  message.conversation = message.from;
   const { to: phoneNumber } = message;
   try {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
     message.accountId = accountId;
-    // MessageService.insertMessage(message);
+    message = await MessageService.insertMessage({ pool, ...message });
+    console.log(message);
     io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
     Messaging.sendIncomingMessage({ notificationTokens });
@@ -93,8 +98,14 @@ app.post('/sms', async (req, res) => {
 
 app.post('/voice', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
+  call.direction = 'inbound';
+  call.conversation = call.from;
+  call.status = 'initiated';
+  call.sid = call.callSid;
   console.log(call);
   const { to, from } = call;
+  const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: to });
+  call.accountId = accountId;
   const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
   console.log(users);
   console.log('here');
@@ -113,6 +124,7 @@ app.post('/voice', async (req, res) => {
   });
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
+  CallService.insertCall({ pool, ...call });
   console.log('Response:' + voiceResponse.toString());
 });
 
@@ -192,11 +204,8 @@ app.get('/accounts', checkJwt, async (req, res) => {
 app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   let authorization = req.headers.authorization;
   let { sub: userId } = req.user;
-  let phoneNumber = '+15005550006';
-  if (NODE_ENV === 'production') {
-    const { account } = req.body;
-    phoneNumber = account.phoneNumber;
-  }
+  const { account } = req.body;
+  phoneNumber = account.phoneNumber;
   try {
     const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
     if (email_verified) {
@@ -263,25 +272,9 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
   let messages = [];
   try {
     const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
-    if (account && account.phoneNumber) {
+    if (account && account.id) {
       const { phoneNumber } = account;
-      if (NODE_ENV === 'production') {
-        let toMessages = twilioClient.messages
-          .list({
-             to: phoneNumber,
-             limit: 100,
-           });
-        let fromMessages = twilioClient.messages
-          .list({
-            from: phoneNumber,
-            limit: 100,
-          });
-        let results = await Promise.all([toMessages, fromMessages]);
-        messages = results[0].concat(results[1]);
-        messages = messages.sort((a, b) => b.dateCreated - a.dateCreated);
-      } else {
-        messages = require('./mock-data/messages').default.messages;
-      }
+      let messages = await MessageService.selectMessagesByAccountId({ pool, accountId });
       res.json({ messages });
     } else {
       res.status(400).json();
@@ -305,6 +298,9 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
       const message = await twilioClient.messages
         .create({ body: text, from, to });
       const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: from });
+      message.accountId = accountId;
+      message.conversation = message.to;
+      message = await MessageService.insertMessage({ pool, ...message });
       io.to(accountId).emit('did-receive-message', { message });
       res.json({ message });
     } else {
@@ -320,10 +316,13 @@ app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   console.log(call);
   const { to, from, caller } = call;
+  call.conversation = to;
+  call.direction = 'outbound-api';
   let userIdBase64Encoded = caller.replace('client:', '');
   console.log(userIdBase64Encoded);
   let userId = Buffer.from(userIdBase64Encoded, 'base64').toString('utf8');
   let accountId = from;
+  call.accountId = accountId;
   console.log(userId);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   let callerNumber;
@@ -344,12 +343,18 @@ app.post('/make-call', async (req, res) => {
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
+  CallService.insertCall({ pool, ...call });
   console.log('Response:' + voiceResponse.toString());
 });
 
 app.post('/call-status', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
-  console.log(call);
+  if (call.parentCallSid) {
+    console.log(call);
+    call.sid = call.parentCallSid;
+    call.status = call.callStatus;
+    CallService.updateCallBySid({ pool, ...call });
+  }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
 });
@@ -362,26 +367,7 @@ app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
   try {
     const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
     if (account && account.phoneNumber) {
-      const { phoneNumber } = account;
-      if (NODE_ENV === 'production') {
-        let toCalls = twilioClient.calls
-          .list({
-             to: phoneNumber,
-             limit: 100,
-           });
-        let fromCalls = twilioClient.calls
-          .list({
-            from: phoneNumber,
-            limit: 100,
-          });
-        let results = await Promise.all([toCalls, fromCalls]);
-        calls = results[0].concat(results[1]);
-        calls.map((call) => makeKeysCamelCase(call));
-        calls = calls.sort((a, b) => b.dateCreated - a.dateCreated);
-      } else {
-        calls = require('./mock-data/calls').default.calls;
-        calls = calls.map((call) => makeKeysCamelCase(call));
-      }
+      let calls = await CallService.selectCallsByAccountId({ pool, accountId });
       res.json({ calls });
     } else {
       res.status(400).json();

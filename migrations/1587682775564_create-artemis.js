@@ -167,13 +167,31 @@ exports.up = (pgm) => {
   );
 
   pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
-     ('facebook-10102949405260058', 'jamiekennedy8@gmail.com', 'Jamie Kennedy');`);
+     ('google-oauth2|110605702456856556979', 'vernonpearson.8@gmail.com', 'Vernon Pearson');`);
 
-  pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid) VALUES
-      ('a6b3336a-4b57-472a-929b-8e66fdb5ba71', '+13128151992', 'ACd2fe81209777162c06ecfc50dd87fa84');`);
+  pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
+    ('auth0|6014c7a3340285007160ea88', 'test.venepe@gmail.com', 'Vernon Pearson');`);
+
+  pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
+    ('google-oauth2|113432813319713203177', 'vernon.pearson9@gmail.com', 'Vernon Pearson');`);
+
+  pgm.sql(`INSERT INTO artemis.user (id, email, name) VALUES
+      ('google-oauth2|110622456162747782869', 'venepellc@gmail.com', 'test.venepe@gmail.com');`);
+
+  pgm.sql(`INSERT INTO artemis.account (id, phone_number, sid, is_active) VALUES
+      ('d6c3c771-605f-45d2-a155-9264330f42bd', '+14257286906', 'PNc98730afacc8ba1dd18826227f6c9815', true);`);
 
   pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
-      ('facebook-10102949405260058', 'a6b3336a-4b57-472a-929b-8e66fdb5ba71');`);
+      ('google-oauth2|110605702456856556979', 'd6c3c771-605f-45d2-a155-9264330f42bd');`);
+
+  pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
+      ('auth0|6014c7a3340285007160ea88', 'd6c3c771-605f-45d2-a155-9264330f42bd');`);
+
+  pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
+      ('google-oauth2|113432813319713203177', 'd6c3c771-605f-45d2-a155-9264330f42bd');`);
+
+  pgm.sql(`INSERT INTO artemis.owner (user_id, account_id) VALUES
+      ('google-oauth2|110622456162747782869', 'd6c3c771-605f-45d2-a155-9264330f42bd');`);
 
 };
 

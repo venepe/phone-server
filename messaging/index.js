@@ -45,6 +45,28 @@ const sendWelcomeMessage = ({ notificationTokens = [], name = '' }) => {
   }
 }
 
+const sendCalling = ({ notificationTokens = [], phoneNumber }) => {
+  if (notificationTokens.length > 0) {
+    const title = 'Calling...';
+    const body = 'New message';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
 export default {
   sendIncomingMessage,
   sendWelcomeMessage,
