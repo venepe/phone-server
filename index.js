@@ -320,7 +320,6 @@ app.get('/accounts/:accountId/messages', checkJwt, async (req, res) => {
 });
 
 app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req, res) => {
-
   let { sub: userId } = req.user;
   const { accountId } = req.params;
   const { text, to } = req.body.message;
@@ -346,34 +345,51 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
   }
 });
 
+let globalSessionId = {};
+
 app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   console.log(call);
+
   const { to, from, caller, callStatus, callSid } = call;
+  let accountId = from;
+  call.accountId = accountId;
   call.conversation = to;
   call.status = callStatus;
   call.sid = callSid;
   call.direction = 'outbound-api';
+
   let userIdBase64Encoded = caller.replace('client:', '');
-  console.log(userIdBase64Encoded);
   let userId = Buffer.from(userIdBase64Encoded, 'base64').toString('utf8');
-  let accountId = from;
-  call.accountId = accountId;
-  console.log(userId);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   let callerNumber;
+
   try {
     const account = await AccountService.selectAccountByAccountIdAndUserId({ pool, userId, accountId });
     if (account && account.phoneNumber) {
       callerNumber = account.phoneNumber;
       call.from = callerNumber;
-      const dial = voiceResponse.dial({ callerId : callerNumber });
-      dial.number(
-        {
-          statusCallbackEvent: 'initiated ringing answered no-answer completed',
-          statusCallback: TWILIO_VOICE_STATUS_URL,
-          statusCallbackMethod: 'POST',
-        }, to);
+
+      call = await twilioClient.calls
+          .create({
+             url: `${API_URL}/join-conference/${accountId}`,
+             to: to,
+             from: callerNumber,
+             statusCallback: `${API_URL}/complete-call/${accountId}`,
+             statusCallbackEvent: 'completed',
+             statusCallbackMethod: 'POST',
+           });
+
+      globalSessionId[accountId] = call.sid;
+
+      const dial = voiceResponse.dial();
+      dial.conference(accountId, {
+        waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
+        statusCallback: `${API_URL}/leave-call`,
+        statusCallbackEvent: 'leave join',
+        statusCallbackMethod: 'POST',
+      });
+
     }
   } catch (err) {
     console.log(err);
@@ -382,6 +398,58 @@ app.post('/make-call', async (req, res) => {
   res.end(voiceResponse.toString());
   CallService.insertCall({ pool, ...call });
   console.log('Response:' + voiceResponse.toString());
+});
+
+app.post('/join-conference/:accountId', async (req, res) => {
+  const { accountId } = req.params;
+  const dial = voiceResponse.dial();
+  dial.conference(accountId, {
+    waitUrl: '',
+    statusCallback: `${API_URL}/leave-call`,
+    statusCallbackEvent: 'leave',
+    statusCallbackMethod: 'POST',
+  });
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end(voiceResponse.toString());
+});
+
+let sessionID_to_confsid = {};
+
+app.post('/leave-call/:accountId', async (req, res) => {
+  const { accountId } = req.params;
+  let conference = makeKeysCamelCase(req.body);
+  let event = conference.sequenceNumber;
+  let conferenceSid = conference.conferenceSid;
+  let statusCallbackEvent = conference.statusCallbackEvent;
+  let friendlyName = conference.friendlyName;
+  sessionID_to_confsid[friendlyName] = conferenceSid;
+
+  if (statusCallbackEvent === 'participant-leave') {
+    console.log('participant-leave');
+    let participants = await client.conferences(conferenceSid).participants.list();
+    if (participants.length === 1) {
+      console.log('call ended');
+      await client.conferences(conferenceSid).update({ status: 'completed'});
+    } else if (participants === 0 && event === '2') {
+      console.log('call ended');
+      await client.calls(sessionID_to_callsid[friendlyName]).update({status: 'completed'});
+    }
+  }
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end();
+});
+
+app.post('/complete-call/:accountId', async (req, res) => {
+  const { accountId } = req.params;
+  console.log('## Ending conference call, callee rejected call');
+  let body = makeKeysCamelCase(req.body);
+  console.log(body);
+  let participants = await client.conferences(conferenceSid).participants.list();
+  if (participants.length === 1) {
+    await client.conferences(accountId).update({ status: 'completed'});
+  }
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end();
 });
 
 app.post('/call-status', async (req, res) => {
