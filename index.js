@@ -108,8 +108,6 @@ app.post('/voice', async (req, res) => {
   const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: to });
   call.accountId = accountId;
   const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
-  console.log(users);
-  console.log('here');
   let callerNumber = from;
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
@@ -117,7 +115,7 @@ app.post('/voice', async (req, res) => {
     const userIdBase64Encoded = Buffer.from(userId).toString('base64');
     const client = dial.client(
       {
-        statusCallback: `${API_URL}/complete-call/${accountId}`,
+        statusCallback: `${API_URL}/complete-call/${accountId}/participants/${userId}`,
         statusCallbackEvent: 'initiated completed',
         statusCallbackMethod: 'POST',
       }
@@ -397,8 +395,8 @@ app.post('/make-call', async (req, res) => {
              url: `${API_URL}/join-conference/${accountId}/participants/${encodeURIComponent(userId)}`,
              to: to,
              from: callerNumber,
-             statusCallback: `${API_URL}/complete-call/${accountId}`,
-             statusCallbackEvent: 'completed',
+             statusCallback: `${API_URL}/complete-call/${accountId}/participants/${userId}`,
+             statusCallbackEvent: 'initiated completed',
              statusCallbackMethod: 'POST',
            });
 
@@ -442,7 +440,6 @@ app.post('/join-conference/:accountId/participants/:userId', async (req, res) =>
   res.end(voiceResponse.toString());
 
   const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
-  console.log(notificationTokens);
   const { name } = await UserService.selectUser({ pool, userId });
   Messaging.ongoingCall({ notificationTokens, name });
 });
@@ -487,12 +484,12 @@ app.post('/leave-call/:accountId', async (req, res) => {
   res.end();
 });
 
-app.post('/complete-call/:accountId', async (req, res) => {
+app.post('/complete-call/:accountId/participants/:userId', async (req, res) => {
   console.log('## Ending conference call, callee rejected call');
-  const { accountId } = req.params;
+  const { accountId, userId } = req.params;
   const conferenceSid = globalSessionIdToConferenceSid[accountId];
   let call = makeKeysCamelCase(req.body);
-  console.log(call);
+  console.log('call', call);
   globalSessionIdToCallSid[accountId] = call.sid;
 
   if (call.callStatus === 'completed') {
@@ -504,6 +501,13 @@ app.post('/complete-call/:accountId', async (req, res) => {
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
+
+  if (call.callStatus === 'completed') {
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    const { name } = await UserService.selectUser({ pool, userId });
+    Messaging.ongoingCall({ notificationTokens, name });
+  }
+
 });
 
 app.post('/call-status', async (req, res) => {
