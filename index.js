@@ -110,19 +110,28 @@ app.post('/voice', async (req, res) => {
   const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
   console.log(users);
   console.log('here');
+  let callerNumber = from;
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
   users.map(({ userId }) => {
     const userIdBase64Encoded = Buffer.from(userId).toString('base64');
     const client = dial.client(
       {
-        statusCallbackEvent: 'initiated ringing answered no-answer completed',
-        statusCallback: TWILIO_VOICE_STATUS_URL,
+        statusCallback: `${API_URL}/complete-call/${accountId}`,
+        statusCallbackEvent: 'initiated completed',
         statusCallbackMethod: 'POST',
       }
     );
     client.identity(userIdBase64Encoded);
   });
+
+   dial.conference(accountId, {
+     waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
+     waitMethod: 'GET',
+     statusCallback: `${API_URL}/leave-call/${accountId}`,
+     statusCallbackEvent: 'leave join',
+     statusCallbackMethod: 'POST',
+   });
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
   CallService.insertCall({ pool, ...call });
@@ -345,7 +354,7 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
   }
 });
 
-let globalSessionId = {};
+let globalSessionIdToCallSid = {};
 
 app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
@@ -353,6 +362,19 @@ app.post('/make-call', async (req, res) => {
 
   const { to, from, caller, callStatus, callSid } = call;
   let accountId = from;
+  if (accountId === to) {
+    const { accountId } = req.params;
+    const dial = voiceResponse.dial();
+    dial.conference(accountId, {
+      waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
+      statusCallback: `${API_URL}/leave-call/${accountId}`,
+      statusCallbackEvent: 'leave',
+      statusCallbackMethod: 'POST',
+    });
+    res.writeHead(200, {'Content-Type': 'text/xml'});
+    res.end(voiceResponse.toString());
+    return;
+  }
   call.accountId = accountId;
   call.conversation = to;
   call.status = callStatus;
@@ -370,7 +392,7 @@ app.post('/make-call', async (req, res) => {
       callerNumber = account.phoneNumber;
       call.from = callerNumber;
 
-      call = await twilioClient.calls
+      let twCall = await twilioClient.calls
           .create({
              url: `${API_URL}/join-conference/${accountId}`,
              to: to,
@@ -380,12 +402,15 @@ app.post('/make-call', async (req, res) => {
              statusCallbackMethod: 'POST',
            });
 
-      globalSessionId[accountId] = call.sid;
+      call = { ...call, ...twCall }
+
+      globalSessionIdToCallSid[accountId] = call.sid;
 
       const dial = voiceResponse.dial();
       dial.conference(accountId, {
         waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
-        statusCallback: `${API_URL}/leave-call`,
+        waitMethod: 'GET',
+        statusCallback: `${API_URL}/leave-call/${accountId}`,
         statusCallbackEvent: 'leave join',
         statusCallbackMethod: 'POST',
       });
@@ -402,10 +427,11 @@ app.post('/make-call', async (req, res) => {
 
 app.post('/join-conference/:accountId', async (req, res) => {
   const { accountId } = req.params;
+  const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
   dial.conference(accountId, {
     waitUrl: '',
-    statusCallback: `${API_URL}/leave-call`,
+    statusCallback: `${API_URL}/leave-call/${accountId}`,
     statusCallbackEvent: 'leave',
     statusCallbackMethod: 'POST',
   });
@@ -413,7 +439,20 @@ app.post('/join-conference/:accountId', async (req, res) => {
   res.end(voiceResponse.toString());
 });
 
-let sessionID_to_confsid = {};
+app.post('/add-participant', async (req, res) => {
+  const { accountId } = req.params;
+  const dial = voiceResponse.dial();
+  dial.conference(accountId, {
+    waitUrl: '',
+    statusCallback: `${API_URL}/leave-call/${accountId}`,
+    statusCallbackEvent: 'leave',
+    statusCallbackMethod: 'POST',
+  });
+  res.writeHead(200, {'Content-Type': 'text/xml'});
+  res.end(voiceResponse.toString());
+});
+
+let globalSessionIdToConferenceSid = {};
 
 app.post('/leave-call/:accountId', async (req, res) => {
   const { accountId } = req.params;
@@ -421,32 +460,39 @@ app.post('/leave-call/:accountId', async (req, res) => {
   let event = conference.sequenceNumber;
   let conferenceSid = conference.conferenceSid;
   let statusCallbackEvent = conference.statusCallbackEvent;
-  let friendlyName = conference.friendlyName;
-  sessionID_to_confsid[friendlyName] = conferenceSid;
+  globalSessionIdToConferenceSid[accountId] = conferenceSid;
 
   if (statusCallbackEvent === 'participant-leave') {
     console.log('participant-leave');
-    let participants = await client.conferences(conferenceSid).participants.list();
-    if (participants.length === 1) {
-      console.log('call ended');
-      await client.conferences(conferenceSid).update({ status: 'completed'});
-    } else if (participants === 0 && event === '2') {
-      console.log('call ended');
-      await client.calls(sessionID_to_callsid[friendlyName]).update({status: 'completed'});
-    }
+    let participants = [];
+    participants = await twilioClient.conferences(conferenceSid).participants.list();
+
+      if (participants.length === 1) {
+        console.log('call ended');
+        const res = await twilioClient.conferences(conferenceSid).update({ status: 'completed'});
+      } else if (participants === 0 && event === '2') {
+        console.log('call ended');
+        await twilioClient.calls(globalSessionIdToCallSid[accountId]).update({ status: 'completed' });
+      }
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
 });
 
 app.post('/complete-call/:accountId', async (req, res) => {
-  const { accountId } = req.params;
   console.log('## Ending conference call, callee rejected call');
-  let body = makeKeysCamelCase(req.body);
-  console.log(body);
-  let participants = await client.conferences(conferenceSid).participants.list();
-  if (participants.length === 1) {
-    await client.conferences(accountId).update({ status: 'completed'});
+  const { accountId } = req.params;
+  const conferenceSid = globalSessionIdToConferenceSid[accountId];
+  let call = makeKeysCamelCase(req.body);
+  console.log(call);
+  globalSessionIdToCallSid[accountId] = call.sid;
+
+  if (call.callStatus === 'completed') {
+    let participants = await twilioClient.conferences(conferenceSid).participants.list();
+    if (participants.length === 1) {
+      console.log('end conf');
+      await twilioClient.conferences(conferenceSid).update({ status: 'completed' });
+    }
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
@@ -455,7 +501,7 @@ app.post('/complete-call/:accountId', async (req, res) => {
 app.post('/call-status', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   if (call.parentCallSid) {
-    console.log(call);
+    // console.log(call);
     call.sid = call.parentCallSid;
     call.status = call.callStatus;
     CallService.updateCallBySid({ pool, ...call });
