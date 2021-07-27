@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
 import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
+import { getActiveNumberByAccountId, setActiveNumberByAccountId } from './utilities/active-number-store';
 import { validateAccount, validateMessage, validateOwner,
   validateUpdateUser, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
@@ -651,6 +652,34 @@ io = new Server(httpServer);
 io.on('connection', (socket) => {
   socket.on('set-account-id', ({ accountId }) => {
     socket.join(accountId);
+  });
+  socket.on('get-is-account-call-in-progress', async ({ accountId }) => {
+    let participants = [];
+    try {
+      let conferences = await twilioClient.conferences.list({ friendlyName: accountId, status: 'in-progress' });
+      if (conferences.length > 0) {
+        const conferenceSid = conferences[0].sid;
+        participants = await twilioClient.conferences(conferenceSid).participants.list();
+        if (participants.length > 0) {
+          socket.emit('set-is-account-call-in-progress', {
+            isAccountCallInProgress: true,
+            activePhoneNumber: getActiveNumberByAccountId(accountId),
+          });
+        } else {
+          socket.emit('set-is-account-call-in-progress', {
+            isAccountCallInProgress: false,
+            activePhoneNumber: '',
+          });
+        }
+      } else {
+        socket.emit('set-is-account-call-in-progress', {
+          isAccountCallInProgress: false,
+          activePhoneNumber: '',
+        });
+      }
+    } catch (e) {
+      console.log('request-active-call', e);
+    }
   });
 });
 
