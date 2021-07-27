@@ -394,7 +394,7 @@ app.post('/make-call', async (req, res) => {
 
       let twCall = await twilioClient.calls
           .create({
-             url: `${API_URL}/join-conference/${accountId}`,
+             url: `${API_URL}/join-conference/${accountId}/participants/${encodeURIComponent(userId)}`,
              to: to,
              from: callerNumber,
              statusCallback: `${API_URL}/complete-call/${accountId}`,
@@ -425,8 +425,11 @@ app.post('/make-call', async (req, res) => {
   console.log('Response:' + voiceResponse.toString());
 });
 
-app.post('/join-conference/:accountId', async (req, res) => {
-  const { accountId } = req.params;
+app.post('/join-conference/:accountId/participants/:userId', async (req, res) => {
+  const { accountId, userId } = req.params;
+  console.log('joind', userId);
+  let call = makeKeysCamelCase(req.body);
+  console.log(call);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
   dial.conference(accountId, {
@@ -437,6 +440,11 @@ app.post('/join-conference/:accountId', async (req, res) => {
   });
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
+
+  const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+  console.log(notificationTokens);
+  const { name } = await UserService.selectUser({ pool, userId });
+  Messaging.ongoingCall({ notificationTokens, name });
 });
 
 app.post('/add-participant', async (req, res) => {

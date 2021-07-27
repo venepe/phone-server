@@ -45,10 +45,32 @@ const sendWelcomeMessage = ({ notificationTokens = [], name = '' }) => {
   }
 }
 
-const sendCalling = ({ notificationTokens = [], phoneNumber }) => {
+const missedCall = ({ notificationTokens = [], phoneNumber }) => {
   if (notificationTokens.length > 0) {
-    const title = 'Calling...';
-    const body = 'New message';
+    const title = 'Missed call';
+    const body = `${phoneNumber}`;
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
+const ongoingCall = ({ notificationTokens = [], name }) => {
+  if (notificationTokens.length > 0) {
+    const title = 'Ongoing call';
+    const body = `${name} joined a call`;
     const message = {
       tokens: notificationTokens,
       notification: {
@@ -70,4 +92,6 @@ const sendCalling = ({ notificationTokens = [], phoneNumber }) => {
 export default {
   sendIncomingMessage,
   sendWelcomeMessage,
+  missedCall,
+  ongoingCall,
 };

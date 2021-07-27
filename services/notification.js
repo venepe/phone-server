@@ -45,6 +45,26 @@ const selectNotificationTokensByAccountId = async ({ pool, accountId }) => {
   return notificationTokens;
 }
 
+const selectNotificationTokensByAccountIdExcludingUserId = async ({ pool, accountId, userId }) => {
+  const select =
+  ' SELECT messaging.notification_hub.notification_token ' +
+  ' FROM messaging.notification_hub ' +
+  ' JOIN artemis.owner ON (messaging.notification_hub.user_id = artemis.owner.user_id) ' +
+  ' JOIN artemis.account ON (artemis.owner.account_id = artemis.account.id) ' +
+  ' WHERE artemis.account.id = $1 ' +
+  ' AND messaging.notification_hub.user_id != $2 ' +
+  ' ORDER BY messaging.notification_hub.created_at DESC ' +
+  ' LIMIT 10 ';
+  const result = await pool.query({ text: select, values: [ accountId, userId ] });
+  let notificationTokens = [];
+  if (result.rows.length > 0) {
+    result.rows.forEach((row) => {
+      notificationTokens.push(row.notification_token);
+    });
+  }
+  return notificationTokens;
+}
+
 const deleteNotificationTokensByUserId = async ({ pool, userId }) => {
   const del = `DELETE FROM messaging.notification_hub WHERE messaging.notification_hub.user_id = $1 RETURNING *;`;
   await pool.query({ text: del, values: [ userId ] });
@@ -55,5 +75,6 @@ export default {
   insertNotification,
   selectNotificationTokensByPhoneNumber,
   selectNotificationTokensByAccountId,
+  selectNotificationTokensByAccountIdExcludingUserId,
   deleteNotificationTokensByUserId,
 };
