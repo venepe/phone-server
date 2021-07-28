@@ -107,6 +107,7 @@ app.post('/voice', async (req, res) => {
   console.log(call);
   const { to, from } = call;
   const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: to });
+  setActiveNumberByAccountId({ accountId, activeNumber: from });
   call.accountId = accountId;
   const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
   let callerNumber = from;
@@ -116,8 +117,8 @@ app.post('/voice', async (req, res) => {
     const userIdBase64Encoded = Buffer.from(userId).toString('base64');
     const client = dial.client(
       {
-        statusCallback: `${API_URL}/complete-call/${accountId}/participants/${userId}`,
-        statusCallbackEvent: 'initiated completed',
+        statusCallback: `${API_URL}/complete-call/${accountId}/participants/${encodeURIComponent(userId)}`,
+        statusCallbackEvent: 'initiated answered completed',
         statusCallbackMethod: 'POST',
       }
     );
@@ -362,7 +363,7 @@ app.post('/make-call', async (req, res) => {
   const { to, from, caller, callStatus, callSid } = call;
   let accountId = from;
   if (accountId === to) {
-    const { accountId } = req.params;
+    const voiceResponse = new Twilio.twiml.VoiceResponse();
     const dial = voiceResponse.dial();
     dial.conference(accountId, {
       waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
@@ -373,6 +374,8 @@ app.post('/make-call', async (req, res) => {
     res.writeHead(200, {'Content-Type': 'text/xml'});
     res.end(voiceResponse.toString());
     return;
+  } else {
+    setActiveNumberByAccountId({ accountId, activeNumber: to });
   }
   call.accountId = accountId;
   call.conversation = to;
@@ -396,8 +399,8 @@ app.post('/make-call', async (req, res) => {
              url: `${API_URL}/join-conference/${accountId}/participants/${encodeURIComponent(userId)}`,
              to: to,
              from: callerNumber,
-             statusCallback: `${API_URL}/complete-call/${accountId}/participants/${userId}`,
-             statusCallbackEvent: 'initiated completed',
+             statusCallback: `${API_URL}/complete-call/${accountId}/participants/${encodeURIComponent(userId)}`,
+             statusCallbackEvent: 'initiated answered completed',
              statusCallbackMethod: 'POST',
            });
 
@@ -445,19 +448,6 @@ app.post('/join-conference/:accountId/participants/:userId', async (req, res) =>
   Messaging.ongoingCall({ notificationTokens, name });
 });
 
-app.post('/add-participant', async (req, res) => {
-  const { accountId } = req.params;
-  const dial = voiceResponse.dial();
-  dial.conference(accountId, {
-    waitUrl: '',
-    statusCallback: `${API_URL}/leave-call/${accountId}`,
-    statusCallbackEvent: 'leave',
-    statusCallbackMethod: 'POST',
-  });
-  res.writeHead(200, {'Content-Type': 'text/xml'});
-  res.end(voiceResponse.toString());
-});
-
 let globalSessionIdToConferenceSid = {};
 
 app.post('/leave-call/:accountId', async (req, res) => {
@@ -475,10 +465,20 @@ app.post('/leave-call/:accountId', async (req, res) => {
 
       if (participants.length === 1) {
         console.log('call ended');
-        const res = await twilioClient.conferences(conferenceSid).update({ status: 'completed'});
+        setActiveNumberByAccountId({ accountId, activeNumber: '' });
+        await twilioClient.conferences(conferenceSid).update({ status: 'completed'});
+        io.to(accountId).emit('set-is-account-call-in-progress', {
+          isAccountCallInProgress: false,
+          activePhoneNumber: '',
+        });
       } else if (participants === 0 && event === '2') {
         console.log('call ended');
+        setActiveNumberByAccountId({ accountId, activeNumber: '' });
         await twilioClient.calls(globalSessionIdToCallSid[accountId]).update({ status: 'completed' });
+        io.to(accountId).emit('set-is-account-call-in-progress', {
+          isAccountCallInProgress: false,
+          activePhoneNumber: '',
+        });
       }
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
@@ -493,11 +493,33 @@ app.post('/complete-call/:accountId/participants/:userId', async (req, res) => {
   console.log('call', call);
   globalSessionIdToCallSid[accountId] = call.sid;
 
+  if (call.callStatus === 'in-progress') {
+    const activePhoneNumber = getActiveNumberByAccountId({ accountId });
+    io.to(accountId).emit('set-is-account-call-in-progress', {
+      isAccountCallInProgress: true,
+      activePhoneNumber,
+    });
+  }
+
   if (call.callStatus === 'completed') {
-    let participants = await twilioClient.conferences(conferenceSid).participants.list();
+    let participants = [];
+    try {
+      participants = await twilioClient.conferences(conferenceSid).participants.list();
+    } catch (e) {
+      setActiveNumberByAccountId({ accountId, activeNumber: '' });
+      io.to(accountId).emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: false,
+        activePhoneNumber: '',
+      });
+    }
     if (participants.length === 1) {
       console.log('end conf');
       await twilioClient.conferences(conferenceSid).update({ status: 'completed' });
+      setActiveNumberByAccountId({ accountId, activeNumber: '' });
+      io.to(accountId).emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: false,
+        activePhoneNumber: '',
+      });
     }
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
@@ -654,31 +676,17 @@ io.on('connection', (socket) => {
     socket.join(accountId);
   });
   socket.on('get-is-account-call-in-progress', async ({ accountId }) => {
-    let participants = [];
-    try {
-      let conferences = await twilioClient.conferences.list({ friendlyName: accountId, status: 'in-progress' });
-      if (conferences.length > 0) {
-        const conferenceSid = conferences[0].sid;
-        participants = await twilioClient.conferences(conferenceSid).participants.list();
-        if (participants.length > 0) {
-          socket.emit('set-is-account-call-in-progress', {
-            isAccountCallInProgress: true,
-            activePhoneNumber: getActiveNumberByAccountId(accountId),
-          });
-        } else {
-          socket.emit('set-is-account-call-in-progress', {
-            isAccountCallInProgress: false,
-            activePhoneNumber: '',
-          });
-        }
-      } else {
-        socket.emit('set-is-account-call-in-progress', {
-          isAccountCallInProgress: false,
-          activePhoneNumber: '',
-        });
-      }
-    } catch (e) {
-      console.log('request-active-call', e);
+    const activePhoneNumber = getActiveNumberByAccountId({ accountId });
+    if (activePhoneNumber && activePhoneNumber.length > 0) {
+      socket.emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: true,
+        activePhoneNumber,
+      });
+    } else {
+      socket.emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: false,
+        activePhoneNumber: '',
+      });
     }
   });
 });
