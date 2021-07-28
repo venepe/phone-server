@@ -367,6 +367,7 @@ app.post('/make-call', async (req, res) => {
     const dial = voiceResponse.dial();
     dial.conference(accountId, {
       waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
+      waitMethod: 'GET',
       statusCallback: `${API_URL}/leave-call/${accountId}`,
       statusCallbackEvent: 'leave',
       statusCallbackMethod: 'POST',
@@ -529,6 +530,12 @@ app.post('/complete-call/:accountId/participants/:userId', async (req, res) => {
     const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
     const { name } = await UserService.selectUser({ pool, userId });
     Messaging.ongoingCall({ notificationTokens, name });
+  }
+
+  if (call.callStatus === 'no-answer') {
+    let from = call.from;
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+    Messaging.ongoingCall({ notificationTokens, phoneNumber: from });
   }
 
 });
