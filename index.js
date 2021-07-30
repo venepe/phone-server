@@ -79,19 +79,6 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/test', async (req, res) => {
-  let accountId = 'd6c3c771-605f-45d2-a155-9264330f42bd';
-  let r = (Math.random() + 1).toString(36).substring(7);
-  let from = '+18156237974';
-  const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
-  Messaging.incomingCall({ notificationTokens, phoneNumber: from, sid: r });
-  setTimeout( async () => {
-    const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
-    Messaging.missedCall({ notificationTokens, phoneNumber: from, sid: r });
-  }, 10000);
-  res.json({ });
-});
-
 app.post('/sms', async (req, res) => {
   let message = makeKeysCamelCase(req.body);
   message.direction = 'inbound';
