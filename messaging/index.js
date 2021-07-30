@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import moment from 'moment';
 const firebaseApp = admin.initializeApp();
 
 const sendIncomingMessage = ({ notificationTokens = [] }) => {
@@ -45,7 +46,7 @@ const sendWelcomeMessage = ({ notificationTokens = [], name = '' }) => {
   }
 }
 
-const missedCall = ({ notificationTokens = [], phoneNumber }) => {
+const missedCall = ({ notificationTokens = [], phoneNumber, sid }) => {
   if (notificationTokens.length > 0) {
     const title = 'Missed call';
     const body = `${phoneNumber}`;
@@ -59,6 +60,16 @@ const missedCall = ({ notificationTokens = [], phoneNumber }) => {
         title,
         body,
       },
+      apns: {
+        headers: {
+          'apns-collapse-id': sid,
+        }
+      },
+      android: {
+        notification: {
+          tag: sid,
+        },
+      },
     };
 
     admin.messaging().sendMulticast(
@@ -67,7 +78,77 @@ const missedCall = ({ notificationTokens = [], phoneNumber }) => {
   }
 }
 
-const ongoingCall = ({ notificationTokens = [], name }) => {
+const completedCall = ({ notificationTokens = [], sid }) => {
+  if (notificationTokens.length > 0) {
+    const title = 'Completed call';
+    const body = ``;
+    const apnsExpiration = moment.utc().add(45, 'seconds').unix().toString();
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+      apns: {
+        headers: {
+          'apns-expiration': apnsExpiration,
+          'apns-collapse-id': sid,
+        }
+      },
+      android: {
+        ttl: 45000,
+        notification: {
+          tag: sid,
+        },
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
+const incomingCall = ({ notificationTokens = [], phoneNumber, sid }) => {
+  if (notificationTokens.length > 0) {
+    const title = 'Incoming call';
+    const body = `${phoneNumber}`;
+    const apnsExpiration = moment.utc().add(45, 'seconds').unix().toString();
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+      apns: {
+        headers: {
+          'apns-expiration': apnsExpiration,
+          'apns-collapse-id': sid,
+        }
+      },
+      android: {
+        ttl: 4500,
+        notification: {
+          tag: sid,
+        },
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
+const ongoingCall = ({ notificationTokens = [], name, sid }) => {
   if (notificationTokens.length > 0) {
     const title = 'Ongoing call';
     const body = `${name} joined a call`;
@@ -81,6 +162,16 @@ const ongoingCall = ({ notificationTokens = [], name }) => {
         title,
         body,
       },
+      apns: {
+        headers: {
+          'apns-collapse-id': sid,
+        }
+      },
+      android: {
+        notification: {
+          tag: sid,
+        },
+      },
     };
 
     admin.messaging().sendMulticast(
@@ -93,5 +184,7 @@ export default {
   sendIncomingMessage,
   sendWelcomeMessage,
   missedCall,
+  completedCall,
   ongoingCall,
+  incomingCall,
 };

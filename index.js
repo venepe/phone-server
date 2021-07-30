@@ -5,7 +5,10 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
 import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
-import { getActiveNumberByAccountId, setActiveNumberByAccountId } from './utilities/active-number-store';
+import { getActivePhoneNumberAndStatusByAccountId, setActivePhoneNumberByAccountId,
+  clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId, setIsAccountCallInProgressByAccountId }
+  from './utilities/active-phone-number-store';
+import { didSendMissedNumberNotification, getLastMissedNumberNotification } from './utilities/missed-call-notification-store';
 import { validateAccount, validateMessage, validateOwner,
   validateUpdateUser, VALIDATION_ERROR } from './schemas';
 import AccountService from './services/account';
@@ -76,6 +79,19 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.post('/test', async (req, res) => {
+  let accountId = 'd6c3c771-605f-45d2-a155-9264330f42bd';
+  let r = (Math.random() + 1).toString(36).substring(7);
+  let from = '+18156237974';
+  const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+  Messaging.incomingCall({ notificationTokens, phoneNumber: from, sid: r });
+  setTimeout( async () => {
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+    Messaging.missedCall({ notificationTokens, phoneNumber: from, sid: r });
+  }, 10000);
+  res.json({ });
+});
+
 app.post('/sms', async (req, res) => {
   let message = makeKeysCamelCase(req.body);
   message.direction = 'inbound';
@@ -86,7 +102,6 @@ app.post('/sms', async (req, res) => {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
     message.accountId = accountId;
     message = await MessageService.insertMessage({ pool, ...message });
-    console.log(message);
     io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
     Messaging.sendIncomingMessage({ notificationTokens });
@@ -104,10 +119,9 @@ app.post('/voice', async (req, res) => {
   call.conversation = call.from;
   call.status = 'initiated';
   call.sid = call.callSid;
-  console.log(call);
   const { to, from } = call;
   const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber: to });
-  setActiveNumberByAccountId({ accountId, activeNumber: from });
+  setActivePhoneNumberByAccountId({ accountId, activePhoneNumber: from });
   call.accountId = accountId;
   const users = await UserService.selectUsersByPhoneNumber({ pool, phoneNumber: to });
   let callerNumber = from;
@@ -129,13 +143,14 @@ app.post('/voice', async (req, res) => {
      waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
      waitMethod: 'GET',
      statusCallback: `${API_URL}/leave-call/${accountId}`,
-     statusCallbackEvent: 'leave join',
+     statusCallbackEvent: 'leave join end',
      statusCallbackMethod: 'POST',
    });
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
   CallService.insertCall({ pool, ...call });
-  console.log('Response:' + voiceResponse.toString());
+  const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+  Messaging.incomingCall({ notificationTokens, phoneNumber: from, sid: call.callSid });
 });
 
 app.get('/phone-numbers/available', async (req, res) => {
@@ -358,8 +373,6 @@ let globalSessionIdToCallSid = {};
 
 app.post('/make-call', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
-  console.log(call);
-
   const { to, from, caller, callStatus, callSid } = call;
   let accountId = from;
   if (accountId === to) {
@@ -369,14 +382,14 @@ app.post('/make-call', async (req, res) => {
       waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
       waitMethod: 'GET',
       statusCallback: `${API_URL}/leave-call/${accountId}`,
-      statusCallbackEvent: 'leave',
+      statusCallbackEvent: 'leave join end',
       statusCallbackMethod: 'POST',
     });
     res.writeHead(200, {'Content-Type': 'text/xml'});
     res.end(voiceResponse.toString());
     return;
   } else {
-    setActiveNumberByAccountId({ accountId, activeNumber: to });
+    setActivePhoneNumberByAccountId({ accountId, activePhoneNumber: to });
   }
   call.accountId = accountId;
   call.conversation = to;
@@ -414,7 +427,7 @@ app.post('/make-call', async (req, res) => {
         waitUrl: 'https://storage.googleapis.com/bubblepop_media/phone_ringing.mp3',
         waitMethod: 'GET',
         statusCallback: `${API_URL}/leave-call/${accountId}`,
-        statusCallbackEvent: 'leave join',
+        statusCallbackEvent: 'leave join end',
         statusCallbackMethod: 'POST',
       });
 
@@ -425,28 +438,31 @@ app.post('/make-call', async (req, res) => {
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
   CallService.insertCall({ pool, ...call });
-  console.log('Response:' + voiceResponse.toString());
 });
 
 app.post('/join-conference/:accountId/participants/:userId', async (req, res) => {
   const { accountId, userId } = req.params;
-  console.log('joind', userId);
   let call = makeKeysCamelCase(req.body);
-  console.log(call);
+  console.log('join-conference', call.callStatus);
+  console.log('join-conference', call.callSid);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
   dial.conference(accountId, {
     waitUrl: '',
     statusCallback: `${API_URL}/leave-call/${accountId}`,
-    statusCallbackEvent: 'leave',
+    statusCallbackEvent: 'leave join end',
     statusCallbackMethod: 'POST',
   });
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end(voiceResponse.toString());
-
-  const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
-  const { name } = await UserService.selectUser({ pool, userId });
-  Messaging.ongoingCall({ notificationTokens, name });
+  if (call.callStatus === 'in-progress') {
+    setIsAccountCallInProgressByAccountId({ accountId });
+    const activePhoneNumberAndStatus = getActivePhoneNumberAndStatusByAccountId({ accountId });
+    io.to(accountId).emit('set-is-account-call-in-progress', activePhoneNumberAndStatus);
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    const { name } = await UserService.selectUser({ pool, userId });
+    Messaging.ongoingCall({ notificationTokens, name, sid: call.callSid });
+  }
 });
 
 let globalSessionIdToConferenceSid = {};
@@ -458,92 +474,109 @@ app.post('/leave-call/:accountId', async (req, res) => {
   let conferenceSid = conference.conferenceSid;
   let statusCallbackEvent = conference.statusCallbackEvent;
   globalSessionIdToConferenceSid[accountId] = conferenceSid;
+  console.log('leave-call', statusCallbackEvent);
+  console.log('leave-call', conferenceSid);
+  console.log('leave-call', globalSessionIdToCallSid[accountId]);
 
   if (statusCallbackEvent === 'participant-leave') {
-    console.log('participant-leave');
     let participants = [];
     participants = await twilioClient.conferences(conferenceSid).participants.list();
 
       if (participants.length === 1) {
-        console.log('call ended');
-        setActiveNumberByAccountId({ accountId, activeNumber: '' });
+        // console.log('call ended');
         await twilioClient.conferences(conferenceSid).update({ status: 'completed'});
+        clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
         io.to(accountId).emit('set-is-account-call-in-progress', {
           isAccountCallInProgress: false,
           activePhoneNumber: '',
         });
       } else if (participants === 0 && event === '2') {
-        console.log('call ended');
-        setActiveNumberByAccountId({ accountId, activeNumber: '' });
+        // console.log('call ended');
         await twilioClient.calls(globalSessionIdToCallSid[accountId]).update({ status: 'completed' });
+        clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
         io.to(accountId).emit('set-is-account-call-in-progress', {
           isAccountCallInProgress: false,
           activePhoneNumber: '',
         });
       }
   }
+
+  if (statusCallbackEvent === 'participant-join') {
+    try {
+      let participants = await twilioClient.conferences(conferenceSid).participants.list();
+      setIsAccountCallInProgressByAccountId({ accountId });
+      const activePhoneNumberAndStatus = getActivePhoneNumberAndStatusByAccountId({ accountId });
+      io.to(accountId).emit('set-is-account-call-in-progress', activePhoneNumberAndStatus);
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+      const { name } = await UserService.selectUser({ pool, userId });
+      Messaging.ongoingCall({ notificationTokens, name, sid: globalSessionIdToCallSid[accountId] });
+    } catch (e) {
+
+    }
+  }
+
+  if (statusCallbackEvent === 'conference-end') {
+    try {
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+      Messaging.completedCall({ notificationTokens, sid: globalSessionIdToCallSid[accountId] });
+    } catch (e) {
+
+    }
+  }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
 });
 
 app.post('/complete-call/:accountId/participants/:userId', async (req, res) => {
-  console.log('## Ending conference call, callee rejected call');
+  // console.log('## Complete conference call, callee took action');
   const { accountId, userId } = req.params;
   const conferenceSid = globalSessionIdToConferenceSid[accountId];
   let call = makeKeysCamelCase(req.body);
-  console.log('call', call);
-  globalSessionIdToCallSid[accountId] = call.sid;
-
-  if (call.callStatus === 'in-progress') {
-    const activePhoneNumber = getActiveNumberByAccountId({ accountId });
-    io.to(accountId).emit('set-is-account-call-in-progress', {
-      isAccountCallInProgress: true,
-      activePhoneNumber,
-    });
-  }
-
+  let { from, parentCallSid } = call;
+  globalSessionIdToCallSid[accountId] = call.callSid;
+  console.log('complete-call', call.callStatus);
+  console.log('complete-call', call.callSid);
   if (call.callStatus === 'completed') {
     let participants = [];
     try {
       participants = await twilioClient.conferences(conferenceSid).participants.list();
     } catch (e) {
-      setActiveNumberByAccountId({ accountId, activeNumber: '' });
-      io.to(accountId).emit('set-is-account-call-in-progress', {
-        isAccountCallInProgress: false,
-        activePhoneNumber: '',
-      });
+      clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+      Messaging.completedCall({ notificationTokens, sid: parentCallSid });
     }
     if (participants.length === 1) {
-      console.log('end conf');
+      // console.log('end conf');
       await twilioClient.conferences(conferenceSid).update({ status: 'completed' });
-      setActiveNumberByAccountId({ accountId, activeNumber: '' });
+      clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
       io.to(accountId).emit('set-is-account-call-in-progress', {
         isAccountCallInProgress: false,
         activePhoneNumber: '',
       });
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+      Messaging.completedCall({ notificationTokens, sid: parentCallSid });
+    }
+  } else if (call.callStatus === 'in-progress') {
+    setIsAccountCallInProgressByAccountId({ accountId });
+    setTimeout(async () => {
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+      const { name } = await UserService.selectUser({ pool, userId });
+      Messaging.ongoingCall({ notificationTokens, name, sid: parentCallSid });
+    }, 500);
+  } else if (call.callStatus === 'no-answer') {
+    if (getLastMissedNumberNotification({ accountId }) !== parentCallSid) {
+      didSendMissedNumberNotification({ accountId, parentCallSid });
+      const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
+      Messaging.missedCall({ notificationTokens, phoneNumber: from, sid: parentCallSid });
     }
   }
   res.writeHead(200, {'Content-Type': 'text/xml'});
   res.end();
-
-  if (call.callStatus === 'completed') {
-    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
-    const { name } = await UserService.selectUser({ pool, userId });
-    Messaging.ongoingCall({ notificationTokens, name });
-  }
-
-  if (call.callStatus === 'no-answer') {
-    let from = call.from;
-    const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
-    Messaging.ongoingCall({ notificationTokens, phoneNumber: from });
-  }
-
 });
 
 app.post('/call-status', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   if (call.parentCallSid) {
-    // console.log(call);
     call.sid = call.parentCallSid;
     call.status = call.callStatus;
     CallService.updateCallBySid({ pool, ...call });
@@ -573,15 +606,12 @@ app.get('/accounts/:accountId/calls', checkJwt, async (req, res) => {
 
 app.get('/accounts/:accountId/activation-token', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
-  console.log(userId);
   const { accountId } = req.params;
   const { platform } = req.query;
   let pushCredentialSid = TWILIO_PUSH_CREDENTIAL_SID_IOS;
   if (platform === 'android') {
     pushCredentialSid = TWILIO_PUSH_CREDENTIAL_SID_ANDROID;
   }
-  console.log(pushCredentialSid);
-  console.log(accountId);
   const userIdBase64Encoded = Buffer.from(userId).toString('base64');
   const identity = userIdBase64Encoded;
   const AccessToken = Twilio.jwt.AccessToken;
@@ -595,7 +625,6 @@ app.get('/accounts/:accountId/activation-token', checkJwt, async (req, res) => {
   token.addGrant(voiceGrant);
   token.identity = identity;
   const activationToken = token.toJwt();
-  console.log(activationToken);
   res.json({ activationToken });
 });
 
@@ -683,12 +712,11 @@ io.on('connection', (socket) => {
     socket.join(accountId);
   });
   socket.on('get-is-account-call-in-progress', async ({ accountId }) => {
-    const activePhoneNumber = getActiveNumberByAccountId({ accountId });
+    const activePhoneNumberAndStatus = getActivePhoneNumberAndStatusByAccountId({ accountId }) || {};
+    const { activePhoneNumber } = activePhoneNumberAndStatus;
+    io.to(accountId).emit('set-is-account-call-in-progress', activePhoneNumberAndStatus);
     if (activePhoneNumber && activePhoneNumber.length > 0) {
-      socket.emit('set-is-account-call-in-progress', {
-        isAccountCallInProgress: true,
-        activePhoneNumber,
-      });
+      socket.emit('set-is-account-call-in-progress', activePhoneNumberAndStatus);
     } else {
       socket.emit('set-is-account-call-in-progress', {
         isAccountCallInProgress: false,
