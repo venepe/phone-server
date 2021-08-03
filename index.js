@@ -84,14 +84,14 @@ app.post('/sms', async (req, res) => {
   message.direction = 'inbound';
   message.sid = message.messageSid;
   message.conversation = message.from;
-  const { to: phoneNumber } = message;
+  const { to: phoneNumber, from, body: text } = message;
   try {
     const { id: accountId } = await AccountService.selectAccountByPhoneNumber({ pool, phoneNumber });
     message.accountId = accountId;
     message = await MessageService.insertMessage({ pool, ...message });
     io.to(accountId).emit('did-receive-message', { message });
     const notificationTokens = await NotificationService.selectNotificationTokensByPhoneNumber({ pool, phoneNumber });
-    Messaging.sendIncomingMessage({ notificationTokens });
+    Messaging.sendIncomingMessage({ notificationTokens, from, text });
   } catch (e) {
     console.log(e);
   }
@@ -282,7 +282,7 @@ app.get('/accounts/:accountId', async (req, res) => {
   const { accountId } = req.params;
 
   try {
-    const account = await AccountService.selectAccountByAccountId({ pool, accountId });
+    const account = await AccountService.selectAccountAndOwnersByAccountId({ pool, accountId });
     res.json({ account });
   } catch (err) {
     console.log(err);
@@ -430,8 +430,6 @@ app.post('/make-call', async (req, res) => {
 app.post('/join-conference/:accountId/participants/:userId', async (req, res) => {
   const { accountId, userId } = req.params;
   let call = makeKeysCamelCase(req.body);
-  console.log('join-conference', call.callStatus);
-  console.log('join-conference', call.callSid);
   const voiceResponse = new Twilio.twiml.VoiceResponse();
   const dial = voiceResponse.dial();
   dial.conference(accountId, {
@@ -461,13 +459,19 @@ app.post('/leave-call/:accountId', async (req, res) => {
   let conferenceSid = conference.conferenceSid;
   let statusCallbackEvent = conference.statusCallbackEvent;
   globalSessionIdToConferenceSid[accountId] = conferenceSid;
-  console.log('leave-call', statusCallbackEvent);
-  console.log('leave-call', conferenceSid);
-  console.log('leave-call', globalSessionIdToCallSid[accountId]);
 
   if (statusCallbackEvent === 'participant-leave') {
     let participants = [];
-    participants = await twilioClient.conferences(conferenceSid).participants.list();
+    try {
+      participants = await twilioClient.conferences(conferenceSid).participants.list();
+    } catch (e) {
+      await twilioClient.conferences(conferenceSid).update({ status: 'completed'});
+      clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
+      io.to(accountId).emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: false,
+        activePhoneNumber: '',
+      });
+    }
 
       if (participants.length === 1) {
         // console.log('call ended');
@@ -477,7 +481,7 @@ app.post('/leave-call/:accountId', async (req, res) => {
           isAccountCallInProgress: false,
           activePhoneNumber: '',
         });
-      } else if (participants === 0 && event === '2') {
+      } else if (participants === 0 && event === 2) {
         // console.log('call ended');
         await twilioClient.calls(globalSessionIdToCallSid[accountId]).update({ status: 'completed' });
         clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
@@ -504,6 +508,11 @@ app.post('/leave-call/:accountId', async (req, res) => {
 
   if (statusCallbackEvent === 'conference-end') {
     try {
+      clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId({ accountId });
+      io.to(accountId).emit('set-is-account-call-in-progress', {
+        isAccountCallInProgress: false,
+        activePhoneNumber: '',
+      });
       const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });
       Messaging.completedCall({ notificationTokens, sid: globalSessionIdToCallSid[accountId] });
     } catch (e) {
@@ -521,8 +530,6 @@ app.post('/complete-call/:accountId/participants/:userId', async (req, res) => {
   let call = makeKeysCamelCase(req.body);
   let { from, parentCallSid } = call;
   globalSessionIdToCallSid[accountId] = call.callSid;
-  console.log('complete-call', call.callStatus);
-  console.log('complete-call', call.callSid);
   if (call.callStatus === 'completed') {
     let participants = [];
     try {

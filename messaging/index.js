@@ -2,10 +2,10 @@ import * as admin from 'firebase-admin';
 import moment from 'moment';
 const firebaseApp = admin.initializeApp();
 
-const sendIncomingMessage = ({ notificationTokens = [] }) => {
+const sendIncomingMessage = ({ notificationTokens = [], from, text }) => {
   if (notificationTokens.length > 0) {
-    const title = '👋👋👋';
-    const body = 'New message';
+    const title = `${from}`;
+    const body = `${text}`;
     const message = {
       tokens: notificationTokens,
       notification: {
