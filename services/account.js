@@ -22,7 +22,7 @@ const selectAccounts = async ({ pool, userId }) => {
   return accounts;
 }
 
-const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
+const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transactionId, transactionReceipt, platform }) => {
   let account = {};
   try {
     await pool.query('BEGIN')
@@ -44,8 +44,8 @@ const createAccount = async ({ pool, userId, phoneNumber, sid }) => {
         const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
         await pool.query({ text: insertOwner, values: [ account.id, userId ] });
 
-        const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id) VALUES($1, $2) RETURNING *;';
-        await pool.query({ text: insertReceipt, values: [ account.id, userId ] });
+        const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
+      await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
       } else {
         throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
       }

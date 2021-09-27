@@ -249,10 +249,10 @@ app.get('/accounts', checkJwt, async (req, res) => {
 app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   let authorization = req.headers.authorization;
   let { sub: userId } = req.user;
-  const { account } = req.body;
-  phoneNumber = account.phoneNumber;
+  const { phoneNumber, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
   try {
-    const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
+    // const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
+    let email_verified = true;
     if (email_verified) {
       const result = await twilioClient.incomingPhoneNumbers
         .create({
@@ -261,7 +261,8 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
           voiceUrl: TWILIO_VOICE_URL,
         });
       const { phoneNumber: pn, sid } = result;
-      const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid });
+      const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid,
+        productId, transactionId, transactionReceipt, platform });
       res.json({ account });
     } else {
       return res.status(403).json({ message: 'Please verify email' });
