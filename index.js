@@ -158,7 +158,7 @@ app.get('/phone-numbers/available', async (req, res) => {
         mmsEnabled: true,
         voiceEnabled: true,
         distance: 25,
-        limit: 20,
+        limit: 8,
       };
       if (query && query.length > 0) {
         options.contains = finishAndFormatNumber(query);
@@ -249,6 +249,9 @@ app.get('/accounts', checkJwt, async (req, res) => {
 app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   let authorization = req.headers.authorization;
   let { sub: userId } = req.user;
+  if (!req.body.account.receipt) {
+    req.body.account.receipt = { productId: '', transactionId: '', transactionReceipt: '', platform: '' };
+  }
   const { phoneNumber, receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.account;
   try {
     // const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
@@ -308,6 +311,18 @@ app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
       message = 'You already have a number!';
     }
     res.status(400).json({ message });
+  }
+});
+
+app.post('/accounts/:accountId/activate', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  try {
+    await AccountService.activateAccount({ pool, accountId });
+    res.json({ account: { id: accountId, isActive: true } });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
   }
 });
 
@@ -675,6 +690,10 @@ app.post('/verification-email', checkJwt, async (req, res) => {
     console.log(err);
     res.status(400).json({});
   }
+});
+
+app.get('/ping', (req, res) => {
+  res.json({ status: 200 });
 });
 
 app.use((err, req, res, next) => {

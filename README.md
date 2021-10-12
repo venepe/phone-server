@@ -4,6 +4,7 @@
 ### Getting Started
 
 ```
+./ngrok http 8002
 export DATABASE_URL=postgresql://postgres:f4IPIg*3GIMz@35.224.70.228:5432/postgres
 export DATABASE_URL=postgresql://postgres:supersecretpswd@localhost:5432/postgres
 docker-compose up

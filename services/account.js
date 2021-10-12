@@ -9,6 +9,12 @@ const insertAccount = async ({ pool, phoneNumber, sid }) => {
   return account;
 }
 
+const activateAccount = async ({ pool, accountId }) => {
+  const update = 'UPDATE artemis.account SET is_active = true WHERE artemis.account.id = $1;';
+  await pool.query({ text: update, values: [ accountId ] });
+  return { id: accountId, isActive: true };
+}
+
 const selectAccounts = async ({ pool, userId }) => {
   const select =
   ' SELECT artemis.account.phone_number, artemis.account.is_active, artemis.account.id, artemis.account.created_at ' +
@@ -171,6 +177,7 @@ const selectOwners = async ({ pool, accountId }) => {
 
 export default {
   insertAccount,
+  activateAccount,
   createAccount,
   createOwner,
   deleteOwner,
