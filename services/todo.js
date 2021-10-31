@@ -14,9 +14,16 @@ const updateTodoName = async ({ pool, todoId, name }) => {
   return todo;
 }
 
+const updateTodoIsCompleted = async ({ pool, todoId }) => {
+  const update = `UPDATE artemis.todo SET is_archived = true, is_completed = true WHERE id = $1 RETURNING *;`;
+  const result = await pool.query({ text: update, values: [todoId] });
+  let todo = resultToObject(result);
+  return todo;
+}
+
 const deleteTodo = async ({ pool, todoId }) => {
-  const del = `DELETE FROM artemis.todo WHERE artemis.todo.id = $1 RETURNING *;`;
-  await pool.query({ text: del, values: [todoId] });
+  const update = `UPDATE artemis.todo SET is_archived = true WHERE id = $1 RETURNING *;`;
+  const result = await pool.query({ text: update, values: [todoId] });
   return { success: true };
 }
 
@@ -25,6 +32,7 @@ const selectTodosByAccountId = async ({ pool, accountId }) => {
   ' SELECT * ' +
   ' FROM artemis.todo ' +
   ' WHERE artemis.todo.account_id = $1 ' +
+  ' AND artemis.todo.is_archived = false ' +
   ' ORDER BY artemis.todo.created_at ASC ' +
   ' LIMIT 100 ';
   const result = await pool.query({ text: select, values: [ accountId ] });
@@ -35,6 +43,7 @@ const selectTodosByAccountId = async ({ pool, accountId }) => {
 export default {
   insertTodo,
   updateTodoName,
+  updateTodoIsCompleted,
   deleteTodo,
   selectTodosByAccountId,
 };

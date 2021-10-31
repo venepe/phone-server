@@ -46,6 +46,52 @@ const sendWelcomeMessage = ({ notificationTokens = [], name = '' }) => {
   }
 }
 
+const sendDidCreateTodo = ({ notificationTokens = [], todo }) => {
+  const { name } = todo;
+  if (notificationTokens.length > 0) {
+    const title = name;
+    const body = 'Task created';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
+const sendDidCompleteTodo = ({ notificationTokens = [], todo }) => {
+  const { name } = todo;
+  if (notificationTokens.length > 0) {
+    const title = name;
+    const body = 'Task completed 🎉';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
 const missedCall = ({ notificationTokens = [], phoneNumber, sid }) => {
   if (notificationTokens.length > 0) {
     const title = 'Missed call';
@@ -187,4 +233,6 @@ export default {
   completedCall,
   ongoingCall,
   incomingCall,
+  sendDidCreateTodo,
+  sendDidCompleteTodo,
 };

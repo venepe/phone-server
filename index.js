@@ -18,9 +18,9 @@ import Auth0Service from './services/auth0';
 import CallService from './services/call';
 import MessageService from './services/message';
 import NotificationService from './services/notification';
+import TodoService from './services/todo';
 import UserService from './services/user';
 import Messaging from './messaging';
-import TodoApp from './todo-app';
 import { Server } from 'socket.io';
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
@@ -49,8 +49,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/accounts/:accountId/todos', TodoApp);
 
 app.post('/sms', async (req, res) => {
   let message = makeKeysCamelCase(req.body);
@@ -344,6 +342,62 @@ app.post('/accounts/:accountId/messages', checkJwt, validateMessage, async (req,
     } else {
       res.status(400).json();
     }
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/accounts/:accountId/todos', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  try {
+    const todos = await TodoService.selectTodosByAccountId({ pool, accountId });
+    res.json({ todos });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/accounts/:accountId/todos', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  const { id, name } = req.body.todo;
+  try {
+    const todo = await TodoService.insertTodo({ pool, id, accountId, name });
+    io.to(accountId).emit('did-create-todo', { todo });
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    Messaging.sendDidCreateTodo({ notificationTokens, todo });
+    res.json({ todo });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.put('/accounts/:accountId/todos/:todoId', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId, todoId } = req.params;
+  try {
+    const todo = await TodoService.updateTodoIsCompleted({ pool, todoId });
+    io.to(accountId).emit('did-complete-todo', { todo });
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    Messaging.sendDidCompleteTodo({ notificationTokens, todo });
+    res.json({ todo: { isCompleted: true } });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.delete('/accounts/:accountId/todos/:todoId', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId, todoId } = req.params;
+  try {
+    await TodoService.deleteTodo({ pool, todoId });
+    io.to(accountId).emit('did-delete-todo', { todo: { id: todoId } });
+    res.json({ status: 'success' });
   } catch (err) {
     console.log(err);
     res.status(400).json();
