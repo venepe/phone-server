@@ -4,7 +4,9 @@ import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import config from './config';
+import { getPool } from './db';
 import { finishAndFormatNumber, makeKeysCamelCase } from './utilities';
+import { checkJwt } from './utilities/auth';
 import { getActivePhoneNumberAndStatusByAccountId, setActivePhoneNumberByAccountId,
   clearActivePhoneNumberByAccountIdNumberAndStatusByAccountId, setIsAccountCallInProgressByAccountId }
   from './utilities/active-phone-number-store';
@@ -18,14 +20,10 @@ import MessageService from './services/message';
 import NotificationService from './services/notification';
 import UserService from './services/user';
 import Messaging from './messaging';
+import TodoApp from './todo-app';
 import { Server } from 'socket.io';
-const jwt = require('express-jwt');
-const jwtAuthz = require('express-jwt-authz');
-const jwksRsa = require('jwks-rsa');
-const { Pool } = require('pg');
 import Twilio from 'twilio';
 const PORT = config.get('PORT');
-const AUTH0_DOMAIN = config.get('AUTH0_DOMAIN');
 const TWILIO_ACCOUNT_SID = config.get('TWILIO_ACCOUNT_SID');
 const TWILIO_AUTH_TOKEN = config.get('TWILIO_AUTH_TOKEN');
 const TWILIO_API_KEY = config.get('TWILIO_API_KEY');
@@ -43,34 +41,7 @@ let io;
 console.log(config.get('POSTGRES_HOST'));
 console.log(process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
-const options = {
-  user: config.get('POSTGRES_USER'),
-  password: config.get('POSTGRES_PASSWORD'),
-  host: config.get('POSTGRES_HOST'),
-  database: config.get('POSTGRES_DATABASE'),
-  port: 5432,
-};
-
-if (
-  config.get('INSTANCE_CONNECTION_NAME') &&
-  NODE_ENV === 'production'
-) {
-  options.host = `/cloudsql/${config.get('INSTANCE_CONNECTION_NAME')}`;
-}
-
-const checkJwt = jwt({
-  secret: jwksRsa.expressJwtSecret({
-    cache: true,
-    rateLimit: true,
-    jwksRequestsPerMinute: 5,
-    jwksUri: `https://${AUTH0_DOMAIN}/.well-known/jwks.json`
-  }),
-  audience: `https://bubblepop.io/api/v1/`,
-  issuer: `https://${AUTH0_DOMAIN}/`,
-  algorithms: ['RS256']
-});
-
-const pool = new Pool(options);
+const pool = getPool();
 
 const app = express();
 
@@ -78,6 +49,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use('/accounts/:accountId/todos', TodoApp);
 
 app.post('/sms', async (req, res) => {
   let message = makeKeysCamelCase(req.body);
@@ -297,8 +270,13 @@ app.get('/accounts/:accountId', async (req, res) => {
 app.post('/accounts/:accountId/owners', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
   const { accountId } = req.params;
+  if (!req.body.owner.receipt) {
+    req.body.owner.receipt = { productId: '', transactionId: '', transactionReceipt: '', platform: '' };
+  }
+  const { receipt: { productId, transactionId, transactionReceipt, platform } } = req.body.owner;
   try {
-    const owner = await AccountService.createOwner({ pool, userId, accountId });
+    const owner = await AccountService.createOwner({ pool, userId, accountId,
+      productId, transactionId, transactionReceipt, platform });
     const { name } = owner;
     res.json({ owner });
     const notificationTokens = await NotificationService.selectNotificationTokensByAccountId({ pool, accountId });

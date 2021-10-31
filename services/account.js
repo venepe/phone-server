@@ -1,6 +1,6 @@
 import { resultToObject, resultToArray } from '../utilities';
 const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 4;
-const MAX_OWNERS_PER_USER = 1;
+const MAX_OWNERS_PER_USER = 3;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';
@@ -51,7 +51,7 @@ const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transa
         await pool.query({ text: insertOwner, values: [ account.id, userId ] });
 
         const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
-      await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
+        await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
       } else {
         throw new Error('MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE');
       }
@@ -68,7 +68,7 @@ const createAccount = async ({ pool, userId, phoneNumber, sid, productId, transa
   return account;
 }
 
-const createOwner = async ({ pool, userId, accountId }) => {
+const createOwner = async ({ pool, userId, accountId, productId, transactionId, transactionReceipt, platform }) => {
   let owner = {};
   try {
     await pool.query('BEGIN');
@@ -87,6 +87,9 @@ const createOwner = async ({ pool, userId, accountId }) => {
 
       const insertOwner = 'INSERT INTO artemis.owner(account_id, user_id) VALUES($1, $2) RETURNING *;';
       await pool.query({ text: insertOwner, values: [ account.id, userId ] });
+
+      const insertReceipt = 'INSERT INTO artemis.receipt(account_id, user_id, platform, product_id, transaction_id, transaction_receipt) VALUES($1, $2, $3, $4, $5, $6) RETURNING *;';
+      await pool.query({ text: insertReceipt, values: [ account.id, userId, platform, productId, transactionId, transactionReceipt ] });
 
       const selectOwner =
       ' SELECT artemis.user.name, artemis.account.phone_number, artemis.account.is_active, artemis.owner.id, artemis.account.id AS accountId ' +
