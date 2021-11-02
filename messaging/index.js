@@ -92,6 +92,52 @@ const sendDidCompleteTodo = ({ notificationTokens = [], todo }) => {
   }
 }
 
+const sendDidCreateEssential = ({ notificationTokens = [], essential }) => {
+  const { name } = essential;
+  if (notificationTokens.length > 0) {
+    const title = name;
+    const body = 'Shopping item added';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
+const sendDidCompleteEssential = ({ notificationTokens = [], essential }) => {
+  const { name } = essential;
+  if (notificationTokens.length > 0) {
+    const title = name;
+    const body = 'Got it ✅';
+    const message = {
+      tokens: notificationTokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        title,
+        body,
+      },
+    };
+
+    admin.messaging().sendMulticast(
+      message,
+    );
+  }
+}
+
 const missedCall = ({ notificationTokens = [], phoneNumber, sid }) => {
   if (notificationTokens.length > 0) {
     const title = 'Missed call';
@@ -235,4 +281,6 @@ export default {
   incomingCall,
   sendDidCreateTodo,
   sendDidCompleteTodo,
+  sendDidCreateEssential,
+  sendDidCompleteEssential,
 };

@@ -16,6 +16,7 @@ import { validateAccount, validateMessage, validateOwner,
 import AccountService from './services/account';
 import Auth0Service from './services/auth0';
 import CallService from './services/call';
+import EssentialService from './services/essential';
 import MessageService from './services/message';
 import NotificationService from './services/notification';
 import TodoService from './services/todo';
@@ -397,6 +398,62 @@ app.delete('/accounts/:accountId/todos/:todoId', checkJwt, async (req, res) => {
   try {
     await TodoService.deleteTodo({ pool, todoId });
     io.to(accountId).emit('did-delete-todo', { todo: { id: todoId } });
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.get('/accounts/:accountId/essentials', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  try {
+    const essentials = await EssentialService.selectEssentialsByAccountId({ pool, accountId });
+    res.json({ essentials });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.post('/accounts/:accountId/essentials', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId } = req.params;
+  const { id, name } = req.body.essential;
+  try {
+    const essential = await EssentialService.insertEssential({ pool, id, accountId, name });
+    io.to(accountId).emit('did-create-essential', { essential });
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    Messaging.sendDidCreateEssential({ notificationTokens, essential });
+    res.json({ essential });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.put('/accounts/:accountId/essentials/:essentialId', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId, essentialId } = req.params;
+  try {
+    const essential = await EssentialService.updateEssentialIsCompleted({ pool, essentialId });
+    io.to(accountId).emit('did-complete-essential', { essential });
+    const notificationTokens = await NotificationService.selectNotificationTokensByAccountIdExcludingUserId({ pool, accountId, userId });
+    Messaging.sendDidCompleteEssential({ notificationTokens, essential });
+    res.json({ essential: { isCompleted: true } });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json();
+  }
+});
+
+app.delete('/accounts/:accountId/essentials/:essentialId', checkJwt, async (req, res) => {
+  let { sub: userId } = req.user;
+  const { accountId, essentialId } = req.params;
+  try {
+    await EssentialService.deleteEssential({ pool, essentialId });
+    io.to(accountId).emit('did-delete-essential', { essential: { id: essentialId } });
     res.json({ status: 'success' });
   } catch (err) {
     console.log(err);
