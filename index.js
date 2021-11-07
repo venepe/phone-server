@@ -130,7 +130,7 @@ app.get('/phone-numbers/available', async (req, res) => {
         mmsEnabled: true,
         voiceEnabled: true,
         distance: 25,
-        limit: 8,
+        limit: 5,
       };
       if (query && query.length > 0) {
         options.contains = finishAndFormatNumber(query);

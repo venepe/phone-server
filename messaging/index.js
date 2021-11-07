@@ -27,7 +27,7 @@ const sendIncomingMessage = ({ notificationTokens = [], from, text }) => {
 const sendWelcomeMessage = ({ notificationTokens = [], name = '' }) => {
   if (notificationTokens.length > 0) {
     const title = `Welcome ${name}! 🎉🎉🎉`;
-    const body = 'Your account is now active! You\'re sharing a number!';
+    const body = `${name} said yes! You\'re sharing a number!`;
     const message = {
       tokens: notificationTokens,
       notification: {
