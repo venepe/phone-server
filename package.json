@@ -35,7 +35,8 @@
     "pg-format": "^1.0.4",
     "socket.io": "^3.1.0",
     "twilio": "^3.54.2",
-    "yup": "^0.28.5"
+    "yup": "^0.28.5",
+    "zodiac-signs": "^1.1.0"
   },
   "devDependencies": {}
 }

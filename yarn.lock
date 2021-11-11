@@ -5312,3 +5312,8 @@ yup@^0.28.5:
     property-expr "^2.0.2"
     synchronous-promise "^2.0.10"
     toposort "^2.0.2"
+
+zodiac-signs@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/zodiac-signs/-/zodiac-signs-1.1.0.tgz#66d16cea3b1a9afcb0701f209b42ac7653974d20"
+  integrity sha512-syyPxFcF5CnSmfXw1DU3NEUt7Pk3gccOCNBhEtEyJB0VTySge6o21F+K38YfqcM5mkD59DLuxFB8/vzZ7E1vKQ==

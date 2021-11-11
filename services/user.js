@@ -1,8 +1,8 @@
 import { resultToObject, resultToArray } from '../utilities';
 
-const insertUser = async ({ pool, userId, email, name, picture }) => {
-  const insert = 'INSERT INTO artemis.user(id, email, name, picture) VALUES($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET updated_at = NOW(), email = $2, picture = $4 RETURNING *;';
-  const result = await pool.query({ text: insert, values: [ userId, email, name, picture ] });
+const insertUser = async ({ pool, userId, email, name, picture, birthdate }) => {
+  const insert = 'INSERT INTO artemis.user(id, email, name, picture, birthdate) VALUES($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET updated_at = NOW(), email = $2, picture = $4, birthdate = $5 RETURNING *;';
+  const result = await pool.query({ text: insert, values: [ userId, email, name, picture, birthdate ] });
   let user = resultToObject(result);
   return user;
 }

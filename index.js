@@ -17,6 +17,7 @@ import AccountService from './services/account';
 import Auth0Service from './services/auth0';
 import CallService from './services/call';
 import EssentialService from './services/essential';
+import HoroscopeService from './services/horoscope';
 import MessageService from './services/message';
 import NotificationService from './services/notification';
 import TodoService from './services/todo';
@@ -153,8 +154,9 @@ app.get('/phone-numbers/available', async (req, res) => {
 app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
   try {
-    const { data: { sub: userId, email, name, picture } } = await Auth0Service.getUserInfo({ authorization });
-    const user = await UserService.insertUser({ pool, email, name, userId, picture });
+    const { data: { sub: userId, email, name, picture, birthdate } } = await Auth0Service.getUserInfo({ authorization });
+    console.log(birthdate);
+    const user = await UserService.insertUser({ pool, email, name, userId, picture, birthdate });
     res.json({ user });
   } catch (err) {
     console.log(err);
@@ -732,6 +734,7 @@ app.get('/accounts/:accountId/owners', checkJwt, async (req, res) => {
 
   try {
     const owners = await AccountService.selectOwners({ pool, accountId });
+    console.log(owners);
     res.json({ owners });
   } catch (err) {
     console.log(err);
@@ -777,6 +780,17 @@ app.post('/verification-email', checkJwt, async (req, res) => {
     }
   } catch (err) {
     console.log(err);
+    res.status(400).json({});
+  }
+});
+
+app.get('/horoscopes/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { birthdate } = await UserService.selectUser({ pool, userId });
+  if (birthdate) {
+    const horoscope = await HoroscopeService.getHoroscope({ birthdate });
+    res.json({ horoscope });
+  } else {
     res.status(400).json({});
   }
 });
