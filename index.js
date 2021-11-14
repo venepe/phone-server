@@ -155,7 +155,6 @@ app.post('/users', checkJwt, async (req, res) => {
   let authorization = req.headers.authorization;
   try {
     const { data: { sub: userId, email, name, picture, birthdate } } = await Auth0Service.getUserInfo({ authorization });
-    console.log(birthdate);
     const user = await UserService.insertUser({ pool, email, name, userId, picture, birthdate });
     res.json({ user });
   } catch (err) {
@@ -166,10 +165,8 @@ app.post('/users', checkJwt, async (req, res) => {
 
 app.get('/users/me', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
-  console.log(userId);
   try {
     const user = await UserService.selectUser({ pool, userId });
-    console.log(user);
     res.status(200).json({
       user : {
         id: user.id,
@@ -192,7 +189,6 @@ app.put('/users/me', checkJwt, validateUpdateUser, async (req, res) => {
     if (name && name.length > 1) {
       user = await UserService.updateName({ pool, userId, name });
     } else if (birthdate && birthdate.length > 1) {
-      console.log('update');
       user = await UserService.updateBirthdate({ pool, userId, birthdate });
     }
     res.status(200).json({
@@ -225,7 +221,6 @@ app.get('/accounts', checkJwt, async (req, res) => {
 
   try {
     const accounts = await AccountService.selectAccounts({ pool, userId });
-    console.log(accounts);
     res.json({ accounts });
   } catch (err) {
     console.log(err);
@@ -236,7 +231,6 @@ app.get('/accounts', checkJwt, async (req, res) => {
 app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
   let authorization = req.headers.authorization;
   let { sub: userId } = req.user;
-  console.log('here');
   if (!req.body.account.receipt) {
     req.body.account.receipt = { productId: '', transactionId: '', transactionReceipt: '', platform: '' };
   }
@@ -750,7 +744,6 @@ app.get('/accounts/:accountId/owners', checkJwt, async (req, res) => {
 
   try {
     const owners = await AccountService.selectOwners({ pool, accountId });
-    console.log(owners);
     res.json({ owners });
   } catch (err) {
     console.log(err);

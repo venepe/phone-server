@@ -52,7 +52,6 @@ const UserSchema = Yup.object().shape({
 
 export const validateUpdateUser = async (req, res, next) => {
   let { user } = req.body || {};
-  console.log(user);
   try {
     user = await UserSchema.validate(user);
     req.body.user = user;
