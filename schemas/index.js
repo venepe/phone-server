@@ -58,8 +58,10 @@ export const validateMessage = async (req, res, next) => {
 const UserSchema = Yup.object().shape({
   name: Yup.string()
     .min(2, 'Too Short!')
-    .max(128, 'Too Long!')
-    .required('Required'),
+    .max(128, 'Too Long!'),
+  birthdate: Yup.string()
+    .min(2, 'Too Short!')
+    .max(128, 'Too Long!'),
 });
 
 export const validateUpdateUser = async (req, res, next) => {

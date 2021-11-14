@@ -166,12 +166,16 @@ app.post('/users', checkJwt, async (req, res) => {
 
 app.get('/users/me', checkJwt, async (req, res) => {
   let { sub: userId } = req.user;
+  console.log(userId);
   try {
     const user = await UserService.selectUser({ pool, userId });
+    console.log(user);
     res.status(200).json({
       user : {
         id: user.id,
         name: user.name,
+        birthdate: user.birthdate,
+        picture: user.picture,
       },
     });
   } catch (err) {
@@ -182,13 +186,21 @@ app.get('/users/me', checkJwt, async (req, res) => {
 
 app.put('/users/me', checkJwt, validateUpdateUser, async (req, res) => {
   let { sub: userId } = req.user;
-  const { name  } = req.body.user;
+  const { name, birthdate  } = req.body.user;
   try {
-    const user = await UserService.updateName({ pool, userId, name });
+    let user = {};
+    if (name && name.length > 1) {
+      user = await UserService.updateName({ pool, userId, name });
+    } else if (birthdate && birthdate.length > 1) {
+      console.log('update');
+      user = await UserService.updateBirthdate({ pool, userId, birthdate });
+    }
     res.status(200).json({
       user : {
         id: user.id,
         name: user.name,
+        birthdate: user.birthdate,
+        picture: user.picture,
       },
     });
   } catch (err) {
@@ -213,6 +225,7 @@ app.get('/accounts', checkJwt, async (req, res) => {
 
   try {
     const accounts = await AccountService.selectAccounts({ pool, userId });
+    console.log(accounts);
     res.json({ accounts });
   } catch (err) {
     console.log(err);
