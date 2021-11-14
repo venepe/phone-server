@@ -1,6 +1,6 @@
 import { resultToObject, resultToArray } from '../utilities';
-const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 4;
-const MAX_OWNERS_PER_USER = 3;
+const MAX_PHONE_NUMBERS_NATIVE_ACCOUNT_CAN_CREATE = 3;
+const MAX_OWNERS_PER_USER = 2;
 
 const insertAccount = async ({ pool, phoneNumber, sid }) => {
   const insert = 'INSERT INTO artemis.account(phone_number, sid) VALUES($1, $2) RETURNING *;';

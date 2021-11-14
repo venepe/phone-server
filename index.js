@@ -239,15 +239,13 @@ app.post('/accounts', checkJwt, validateAccount, async (req, res) => {
     // const { data: { email_verified }  } = await Auth0Service.getUserInfo({ authorization });
     let email_verified = true;
     if (email_verified) {
-      // const result = await twilioClient.incomingPhoneNumbers
-      //   .create({
-      //     phoneNumber,
-      //     smsUrl: TWILIO_SMS_URL,
-      //     voiceUrl: TWILIO_VOICE_URL,
-      //   });
-      const pn = phoneNumber;
-      const sid = 'asdfdf';
-      // const { phoneNumber: pn, sid } = result;
+      const result = await twilioClient.incomingPhoneNumbers
+        .create({
+          phoneNumber,
+          smsUrl: TWILIO_SMS_URL,
+          voiceUrl: TWILIO_VOICE_URL,
+        });
+      const { phoneNumber: pn, sid } = result;
       const account = await AccountService.createAccount({ pool, userId, phoneNumber: pn, sid,
         productId, transactionId, transactionReceipt, platform });
       res.json({ account });
