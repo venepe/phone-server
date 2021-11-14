@@ -6,20 +6,6 @@ const AccountSchema = Yup.object().shape({
   phoneNumber: Yup.string()
     .trim()
     .required('Required'),
-  receipt: Yup.object().shape({
-    productId: Yup.string()
-      .trim()
-      .required('Required'),
-    transactionId: Yup.string()
-      .trim()
-      .required('Required'),
-    transactionReceipt: Yup.string()
-      .trim()
-      .required('Required'),
-    platform: Yup.string()
-      .trim()
-      .required('Required'),
-  }),
 });
 
 export const validateAccount = async (req, res, next) => {
